@@ -1,0 +1,15 @@
+import * as XLSX from "xlsx";
+type Row=(string|number|boolean|Date|null|undefined)[];
+type ImportResult={properties:Record<string,unknown>[];units:Record<string,unknown>[];contracts:Record<string,unknown>[];charges:Record<string,unknown>[];errors:string[]};
+const file=process.argv[2],commit=process.argv.includes("--commit");if(!file){console.error("使い方: npm run import:excel -- <xlsmパス> [--commit]");process.exit(1)}
+const wb=XLSX.readFile(file,{cellDates:true});const rows=(name:string):Row[]=>XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:null,raw:true}).slice(4) as Row[];
+const text=(v:unknown)=>v==null?"":String(v).trim(),num=(v:unknown)=>typeof v==="number"?v:Number(text(v).replaceAll(",","").replace("-",""))||0;
+const iso=(v:unknown)=>{if(!v)return null;const d=v instanceof Date?v:new Date(String(v));return Number.isNaN(d.valueOf())?null:d.toISOString().slice(0,10)};
+const result:ImportResult={properties:[],units:[],contracts:[],charges:[],errors:[]};
+for(const [i,r] of rows("物件マスター").entries()){if(!text(r[0]))continue;result.properties.push({property_code:text(r[0]),name:text(r[1]),property_type:text(r[2]),address:text(r[3]),acquisition_date:iso(r[4]),acquisition_price:num(r[5]),acquisition_costs:num(r[6]),development_costs:num(r[7]),current_valuation:num(r[8]),remaining_debt:num(r[9]),annual_property_tax:num(r[10]),notes:text(r[20]),source_row:i+5})}
+for(const [i,r] of rows("区画マスター").entries()){if(!text(r[0]))continue;result.units.push({unit_code:text(r[0]),property_code:text(r[1]),name:text(r[2]),usage_type:text(r[3]),area_sqm:r[4]==null?null:num(r[4]),vehicle_capacity:r[5]==null?null:num(r[5]),has_power:text(r[6])==="有",heavy_machinery_allowed:text(r[7])==="可",standard_rent:num(r[8]),status:text(r[9])||"空き",source_row:i+5})}
+for(const [i,r] of rows("契約履歴").entries()){if(!text(r[0]))continue;const end=iso(r[5]),raw=text(r[7]);const status=end&&end<new Date().toISOString().slice(0,10)?"終了":raw==="定期"?"終了予定":raw==="継続"?"契約中":raw||"下書き";result.contracts.push({contract_code:text(r[0]),property_code:text(r[1]),unit_code:text(r[2]),tenant_name:text(r[3]),start_date:iso(r[4]),end_date:end,monthly_rent:num(r[6]),status,source_row:i+5})}
+for(const [i,r] of rows("月次請求ログ").entries()){if(!r[0]||!text(r[3]))continue;result.charges.push({billing_month:iso(r[0])?.slice(0,7)+"-01",property_code:text(r[1]),unit_code:text(r[2]),contract_code:text(r[3]),billed_amount:num(r[4]),paid_amount:num(r[5]),payment_date:iso(r[9]),payment_status:text(r[10])||"未入金",source_row:i+5})}
+const codes=new Set(result.properties.map(x=>x.property_code));for(const u of result.units)if(!codes.has(u.property_code))result.errors.push(`区画マスター ${u.source_row}行: 物件ID ${u.property_code} が見つかりません`);
+console.log(JSON.stringify({mode:commit?"commit":"dry-run",counts:{properties:result.properties.length,units:result.units.length,contracts:result.contracts.length,charges:result.charges.length},errors:result.errors,data:result},null,2));
+if(commit){console.error("本登録はDB関数へJSONを渡す構成に拡張予定です。現在は安全な変換・検証出力まで対応しています。");process.exitCode=2}
