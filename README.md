@@ -83,6 +83,8 @@ fly deploy
 - `scripts/`: Excel変換
 - `supabase/`: マイグレーションとシード
 
+購入検討画面では、取得価格・評価額・改修費・賃料・空室率・融資条件・出口価格から税金、NOI、DSCR、各種利回り、IRR、残債、損益分岐賃料を計算します。賃料低下、空室率上昇、金利上昇のストレス比較にも対応します。DB利用時は`supabase/migrations/002_purchase_candidates.sql`を追加実行してください。
+
 ## 現時点の制約
 
 - Excel本登録トランザクションは未実装です。

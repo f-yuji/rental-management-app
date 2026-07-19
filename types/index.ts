@@ -29,4 +29,11 @@ export interface MonthlyCharge {
   memo: string; created_at: string; updated_at: string;
 }
 export interface AppSettings { target_year: number; prorate_enabled: boolean; default_billing_day: number; default_payment_due_day: number; }
-export interface AppData { properties: Property[]; units: Unit[]; contracts: Contract[]; charges: MonthlyCharge[]; settings: AppSettings; }
+export interface PurchaseCandidate {
+  id:string; name:string; purchasePrice:number; acquisitionCosts:number; landValuation:number; buildingValuation:number;
+  renovationCosts:number; tenYearRepairs:number; expectedMonthlyRent:number; actualMonthlyRent:number; vacancyRate:number;
+  immediateSalePrice:number; holdingYears:number; futureSalePrice:number; loanAmount:number; interestRate:number;
+  loanYears:number; annualOperatingCosts:number; notes:string;
+}
+export interface PurchaseAssumptions {propertyTaxRate:number;cityPlanningTaxRate:number;landAcquisitionBaseRate:number;landAcquisitionTaxRate:number;buildingAcquisitionTaxRate:number;landRegistrationTaxRate:number;buildingRegistrationTaxRate:number}
+export interface AppData { properties: Property[]; units: Unit[]; contracts: Contract[]; charges: MonthlyCharge[]; settings: AppSettings; purchaseCandidates:PurchaseCandidate[]; purchaseAssumptions:PurchaseAssumptions; }

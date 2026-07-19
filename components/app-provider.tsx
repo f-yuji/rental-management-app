@@ -6,7 +6,7 @@ type Context={data:AppData; setData:React.Dispatch<React.SetStateAction<AppData>
 const AppContext=createContext<Context|null>(null);
 export function AppProvider({children}:{children:React.ReactNode}){
   const [data,setData]=useState(demoData); const [ready,setReady]=useState(false);
-  useEffect(()=>{try{const saved=localStorage.getItem("rental-manager-data");if(saved)setData(JSON.parse(saved) as AppData)}finally{setReady(true)}},[]);
+  useEffect(()=>{try{const saved=localStorage.getItem("rental-manager-data");if(saved){const parsed=JSON.parse(saved) as Partial<AppData>;setData({...demoData,...parsed,purchaseCandidates:parsed.purchaseCandidates??[],purchaseAssumptions:parsed.purchaseAssumptions??demoData.purchaseAssumptions})}}finally{setReady(true)}},[]);
   useEffect(()=>{if(ready)localStorage.setItem("rental-manager-data",JSON.stringify(data))},[data,ready]);
   return <AppContext.Provider value={{data,setData,ready,reset:()=>setData(demoData)}}>{children}</AppContext.Provider>;
 }

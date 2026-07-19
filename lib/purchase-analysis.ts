@@ -1,0 +1,18 @@
+import type { PurchaseAssumptions,PurchaseCandidate } from "@/types";
+export type PurchaseAnalysis=ReturnType<typeof analyzePurchase>;
+const divide=(a:number,b:number)=>b? a/b:null;
+export function annualPayment(principal:number,rate:number,years:number){if(principal<=0||years<=0)return 0;if(rate===0)return principal/years;return principal*rate*Math.pow(1+rate,years)/(Math.pow(1+rate,years)-1)}
+export function remainingLoan(principal:number,rate:number,years:number,payment:number,elapsed:number){if(principal<=0||elapsed>=years)return 0;if(rate===0)return Math.max(principal-payment*elapsed,0);return Math.max(principal*Math.pow(1+rate,elapsed)-payment*(Math.pow(1+rate,elapsed)-1)/rate,0)}
+export function irr(flows:number[]){let low=-.9999,high=10;for(let i=0;i<200;i++){const mid=(low+high)/2;const npv=flows.reduce((s,v,n)=>s+v/Math.pow(1+mid,n),0);if(npv>0)low=mid;else high=mid}const value=(low+high)/2;return Number.isFinite(value)?value:null}
+export function analyzePurchase(c:PurchaseCandidate,a:PurchaseAssumptions){
+ const propertyTax=(c.landValuation+c.buildingValuation)*a.propertyTaxRate,cityTax=(c.landValuation+c.buildingValuation)*a.cityPlanningTaxRate;
+ const acquisitionTax=c.landValuation*a.landAcquisitionBaseRate*a.landAcquisitionTaxRate+c.buildingValuation*a.buildingAcquisitionTaxRate;
+ const registrationTax=c.landValuation*a.landRegistrationTaxRate+c.buildingValuation*a.buildingRegistrationTaxRate;
+ const initialTaxes=acquisitionTax+registrationTax,total=c.purchasePrice+c.acquisitionCosts+c.renovationCosts+initialTaxes,equity=Math.max(total-c.loanAmount,0);
+ const annualExpected=c.expectedMonthlyRent*12,annualActual=c.actualMonthlyRent*12,afterVacancy=annualExpected*(1-c.vacancyRate),repairReserve=c.tenYearRepairs/10;
+ const noi=afterVacancy-propertyTax-cityTax-repairReserve-c.annualOperatingCosts,payment=annualPayment(c.loanAmount,c.interestRate,c.loanYears);
+ const cashFlow=noi-payment,balance=remainingLoan(c.loanAmount,c.interestRate,c.loanYears,payment,c.holdingYears),saleProceeds=c.futureSalePrice-balance;
+ const flows=[-equity,...Array.from({length:Math.max(c.holdingYears,0)},(_,i)=>noi-(i<c.loanYears?payment:0)+(i===c.holdingYears-1?saleProceeds:0))];
+ return {propertyTax,cityTax,acquisitionTax,registrationTax,initialTaxes,total,equity,annualExpected,annualActual,afterVacancy,repairReserve,noi,payment,cashFlow,dscr:divide(noi,payment),grossYield:divide(annualExpected,total),netYield:divide(noi,total),equityYield:divide(cashFlow,equity),simplePayback:divide(total,annualExpected),effectivePayback:divide(Math.max(total-c.immediateSalePrice,0),Math.max(noi,0)),capitalLoss:Math.max(total-c.immediateSalePrice,0),exitValueRatio:divide(c.immediateSalePrice,total),totalRecovery:noi*c.holdingYears+c.futureSalePrice,profit:noi*c.holdingYears+c.futureSalePrice-total,recovered:noi*c.holdingYears+c.futureSalePrice-total>=0,rentAccuracy:divide(c.actualMonthlyRent,c.expectedMonthlyRent),actualNetYield:divide(annualActual*(1-c.vacancyRate)-propertyTax-cityTax-repairReserve-c.annualOperatingCosts,total),ltv:divide(c.loanAmount,total),balance,saleProceeds,breakEvenRent:divide(propertyTax+cityTax+repairReserve+c.annualOperatingCosts+payment,(1-c.vacancyRate)*12),irr:equity>0&&c.holdingYears>0?irr(flows):null};
+}
+export function stressPurchase(c:PurchaseCandidate,a:PurchaseAssumptions,rentAdjustment:number,vacancyOverride:number|null,interestAddition:number){const adjusted={...c,expectedMonthlyRent:c.expectedMonthlyRent*(1+rentAdjustment),vacancyRate:vacancyOverride??c.vacancyRate,interestRate:c.interestRate+interestAddition};return analyzePurchase(adjusted,a)}
