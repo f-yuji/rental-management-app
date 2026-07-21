@@ -57,7 +57,9 @@ export function NumericInput({
     });
   };
   return (
-    <div className="suffix-input">
+    <div
+      className={`suffix-input ${suffix && suffix.length > 1 ? "suffix-input-wide" : ""}`}
+    >
       <input
         {...props}
         ref={inputRef}

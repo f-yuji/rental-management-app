@@ -971,6 +971,11 @@ textarea {
   color: var(--green);
 }
 @media (max-width: 720px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
   .form-section-title,
   .form-span {
     grid-column: auto;
