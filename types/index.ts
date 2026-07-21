@@ -60,6 +60,8 @@ export interface Contract {
   start_date: string;
   end_date: string | null;
   monthly_rent: number;
+  key_money: number;
+  free_rent_months: number;
   billing_day: number;
   payment_due_day: number;
   contract_type: ContractType;

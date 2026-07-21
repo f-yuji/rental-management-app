@@ -1,5 +1,6 @@
 import {
   differenceInCalendarDays,
+  addMonths,
   endOfMonth,
   getDaysInMonth,
   isAfter,
@@ -119,20 +120,35 @@ export function isContractActiveInMonth(
 export function calculateCharge(
   contract: Pick<
     Contract,
-    "start_date" | "end_date" | "monthly_rent" | "status"
+    | "start_date"
+    | "end_date"
+    | "monthly_rent"
+    | "key_money"
+    | "free_rent_months"
+    | "status"
   >,
   month: string,
   prorate: boolean,
 ) {
   if (!isContractActiveInMonth(contract, month)) return 0;
-  if (!prorate) return contract.monthly_rent;
   const first = startOfMonth(parseISO(month));
   const last = endOfMonth(first);
-  const activeStart = isAfter(parseISO(contract.start_date), first)
-    ? parseISO(contract.start_date)
+  const contractStart = parseISO(contract.start_date);
+  const rentStart = addMonths(contractStart, Number(contract.free_rent_months ?? 0));
+  const keyMoney =
+    startOfMonth(contractStart).getTime() === first.getTime()
+      ? Number(contract.key_money ?? 0)
+      : 0;
+  if (isAfter(rentStart, last)) return keyMoney;
+  if (!prorate) return contract.monthly_rent + keyMoney;
+  const activeStart = isAfter(rentStart, first)
+    ? rentStart
     : first;
   const contractEnd = contract.end_date ? parseISO(contract.end_date) : last;
   const activeEnd = isBefore(contractEnd, last) ? contractEnd : last;
   const days = differenceInCalendarDays(activeEnd, activeStart) + 1;
-  return Math.round((contract.monthly_rent * days) / getDaysInMonth(first));
+  return (
+    Math.round((contract.monthly_rent * days) / getDaysInMonth(first)) +
+    keyMoney
+  );
 }

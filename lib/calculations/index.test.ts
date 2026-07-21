@@ -16,6 +16,8 @@ const c = (start: string, end: string | null, rent = 30000) => ({
   start_date: start,
   end_date: end,
   monthly_rent: rent,
+  key_money: 0,
+  free_rent_months: 0,
   status: "契約中" as const,
 });
 describe("資産計算", () => {
@@ -58,6 +60,17 @@ describe("請求計算", () => {
     expect(
       calculateCharge(c("2026-04-10", "2026-04-20", 30000), "2026-04-01", true),
     ).toBe(11000));
+  it("礼金は契約開始月だけ加算する", () => {
+    const contract = { ...c("2026-04-01", null), key_money: 60000 };
+    expect(calculateCharge(contract, "2026-04-01", false)).toBe(90000);
+    expect(calculateCharge(contract, "2026-05-01", false)).toBe(30000);
+  });
+  it("フリーレント後に賃料を発生させる", () => {
+    const contract = { ...c("2026-04-10", null, 30000), free_rent_months: 1 };
+    expect(calculateCharge(contract, "2026-04-01", false)).toBe(0);
+    expect(calculateCharge(contract, "2026-05-01", false)).toBe(30000);
+    expect(calculateCharge(contract, "2026-05-01", true)).toBe(21290);
+  });
   it("対象月判定", () => {
     expect(
       isContractActiveInMonth(c("2026-04-01", null) as Contract, "2026-04-01"),

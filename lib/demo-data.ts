@@ -127,6 +127,8 @@ const contract = (
   start_date: start,
   end_date: end,
   monthly_rent: rent,
+  key_money: 0,
+  free_rent_months: 0,
   billing_day: 1,
   payment_due_day: 末日(),
   contract_type: type,

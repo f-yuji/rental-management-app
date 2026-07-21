@@ -23,6 +23,8 @@ const blank = {
   start_date: "",
   end_date: "",
   monthly_rent: 0,
+  key_money: 0,
+  free_rent_months: 0,
   billing_day: 1,
   payment_due_day: 31,
   contract_type: "継続" as ContractType,
@@ -513,6 +515,37 @@ function ContractForm({
               decimalScale={0}
               suffix="円"
               onChange={(value) => setF({ ...f, monthly_rent: value })}
+            />
+          </label>
+          <label>
+            礼金（家賃収入）
+            <NumericInput
+              value={f.key_money}
+              format="currency"
+              decimalScale={0}
+              suffix="円"
+              onChange={(value) => setF({ ...f, key_money: value })}
+            />
+          </label>
+          <label>
+            敷金（預かり金）
+            <NumericInput
+              value={f.deposit_amount}
+              format="currency"
+              decimalScale={0}
+              suffix="円"
+              onChange={(value) => setF({ ...f, deposit_amount: value })}
+            />
+          </label>
+          <label>
+            フリーレント（月数）
+            <NumericInput
+              value={f.free_rent_months}
+              decimalScale={0}
+              suffix="か月"
+              onChange={(value) =>
+                setF({ ...f, free_rent_months: Math.max(0, value) })
+              }
             />
           </label>
           <label>

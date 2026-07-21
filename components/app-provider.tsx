@@ -111,6 +111,8 @@ const assumptionsFromDb = (
     : demoData.purchaseAssumptions;
 const normalizeContract = (row: Contract): Contract => ({
   ...row,
+  key_money: Number(row.key_money ?? 0),
+  free_rent_months: Number(row.free_rent_months ?? 0),
   renewal_method: row.renewal_method ?? "",
   auto_renew: row.auto_renew ?? false,
   requires_recontract: row.requires_recontract ?? false,
