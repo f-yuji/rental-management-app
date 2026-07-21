@@ -42,6 +42,7 @@ type Actions = {
   createContract(row: Contract): Promise<void>;
   updateContract(id: string, patch: Partial<Contract>): Promise<void>;
   deleteContract(id: string): Promise<void>;
+  deleteContractCharges(contractId: string): Promise<void>;
   createMonthlyCharge(row: MonthlyCharge): Promise<void>;
   createMonthlyCharges(rows: MonthlyCharge[]): Promise<void>;
   updateMonthlyCharge(id: string, patch: Partial<MonthlyCharge>): Promise<void>;
@@ -518,6 +519,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           reminders: d.reminders.filter(
             (x) => !(x.related_type === "contract" && x.related_id === id),
           ),
+        }));
+      },
+      async deleteContractCharges(contractId) {
+        await persist(
+          `contract-charges:${contractId}`,
+          () => repository?.deleteContractCharges(contractId) ?? Promise.resolve(),
+        );
+        setData((d) => ({
+          ...d,
+          charges: d.charges.filter((x) => x.contract_id !== contractId),
         }));
       },
       async createMonthlyCharge(row) {

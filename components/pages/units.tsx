@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Eye, Pencil, Trash2 } from "lucide-react";
+import { Copy, Eye, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useApp } from "@/components/app-provider";
 import { Badge, CsvButton, Modal, PageHeader, RecordSaveStatus } from "@/components/ui/shared";
@@ -27,6 +27,7 @@ export function UnitsPage() {
   const { data, actions, currentUserId } = useApp();
   const [filter, setFilter] = useState("");
   const [editing, setEditing] = useState<Unit | null | "new">(null);
+  const [newTemplate, setNewTemplate] = useState<Form | null>(null);
   const [newCode, setNewCode] = useState("");
   const list = data.units.filter((u) => !filter || u.status === filter);
   const save = async (f: Form) => {
@@ -74,6 +75,7 @@ export function UnitsPage() {
         title="区画"
         description="土地・置場を区画単位で管理"
         action={() => {
+          setNewTemplate(null);
           const property = data.properties[0];
           if (!property) return alert("先に物件を登録してください");
           void actions.nextCode("unit", property.property_code).then((code) => {
@@ -194,6 +196,26 @@ export function UnitsPage() {
                       <Pencil />
                     </button>
                     <button
+                      title="複製"
+                      onClick={() => {
+                        const property = data.properties.find(
+                          (p) => p.id === u.property_id,
+                        );
+                        if (!property) return;
+                        void actions.nextCode("unit", property.property_code).then((code) => {
+                          setNewCode(code);
+                          setNewTemplate({
+                            ...unitToForm(u),
+                            unit_code: code,
+                            name: `${u.name} コピー`,
+                          });
+                          setEditing("new");
+                        });
+                      }}
+                    >
+                      <Copy />
+                    </button>
+                    <button
                       onClick={() => {
                         const contracts = data.contracts.filter(
                           (c) => c.unit_id === u.id,
@@ -230,19 +252,12 @@ export function UnitsPage() {
           initial={
             editing === "new"
               ? {
-                  ...blank,
+                  ...(newTemplate ?? blank),
                   unit_code: newCode,
-                  property_id: data.properties[0]?.id || "",
+                  property_id:
+                    newTemplate?.property_id || data.properties[0]?.id || "",
                 }
-              : {
-                  ...editing,
-                  area_sqm:
-                    editing.area_sqm === null ? "" : String(editing.area_sqm),
-                  vehicle_capacity:
-                    editing.vehicle_capacity === null
-                      ? ""
-                      : String(editing.vehicle_capacity),
-                }
+              : unitToForm(editing)
           }
           onClose={() => setEditing(null)}
           onSave={save}
@@ -250,6 +265,15 @@ export function UnitsPage() {
       )}
     </>
   );
+}
+
+function unitToForm(unit: Unit): Form {
+  return {
+    ...unit,
+    area_sqm: unit.area_sqm === null ? "" : String(unit.area_sqm),
+    vehicle_capacity:
+      unit.vehicle_capacity === null ? "" : String(unit.vehicle_capacity),
+  };
 }
 function UnitForm({
   isNew,

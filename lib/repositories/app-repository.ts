@@ -203,6 +203,14 @@ export function createAppRepository(client: SupabaseClient, userId: string) {
       );
       await remove("contracts", id);
     },
+    deleteContractCharges: async (contractId: string) => {
+      const { error } = await client
+        .from("monthly_charges")
+        .delete()
+        .eq("contract_id", contractId)
+        .eq("user_id", userId);
+      assertOk(error);
+    },
     createMonthlyCharge: (row: MonthlyCharge) => insert("monthly_charges", row),
     createMonthlyCharges: async (rows: MonthlyCharge[]) => {
       if (!rows.length) return;

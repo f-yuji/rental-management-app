@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { Eye, Pencil, Search, Trash2 } from "lucide-react";
+import { Copy, Eye, Pencil, RotateCcw, Search, Trash2 } from "lucide-react";
 import { useApp } from "@/components/app-provider";
 import { Badge, CsvButton, Modal, PageHeader, RecordSaveStatus } from "@/components/ui/shared";
 import { NumericInput } from "@/components/ui/numeric-input";
@@ -63,6 +63,7 @@ export function ContractsPage() {
   const { data, actions, currentUserId } = useApp();
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Contract | null | "new">(null);
+  const [newTemplate, setNewTemplate] = useState<Form | null>(null);
   const [pendingBackfill, setPendingBackfill] = useState<Contract | null>(null);
   const [newCode, setNewCode] = useState("");
   const list = data.contracts.filter(
@@ -129,6 +130,7 @@ export function ContractsPage() {
         updated_at: stamp,
       } as Contract;
       await actions.createContract(created);
+      setNewTemplate(null);
       const currentMonth = new Date()
         .toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" })
         .slice(0, 7);
@@ -147,6 +149,7 @@ export function ContractsPage() {
         title="契約"
         description="契約履歴と未収状況を管理"
         action={() => {
+          setNewTemplate(null);
           void actions
             .nextCode("contract", undefined, new Date().getFullYear())
             .then((code) => {
@@ -277,6 +280,44 @@ export function ContractsPage() {
                       <Pencil />
                     </button>
                     <button
+                      title="複製"
+                      onClick={() => {
+                        void actions
+                          .nextCode("contract", undefined, new Date().getFullYear())
+                          .then((code) => {
+                            setNewCode(code);
+                            setNewTemplate({
+                              ...contractToForm(c),
+                              contract_code: code,
+                            });
+                            setEditing("new");
+                          });
+                      }}
+                    >
+                      <Copy />
+                    </button>
+                    <button
+                      title="請求履歴をリセット"
+                      onClick={() => {
+                        const charges = data.charges.filter(
+                          (charge) => charge.contract_id === c.id,
+                        );
+                        const billed = charges.reduce(
+                          (sum, charge) => sum + charge.billed_amount,
+                          0,
+                        );
+                        if (
+                          charges.length > 0 &&
+                          confirm(
+                            `${c.tenant_name}の請求履歴${charges.length}件（${yen(billed)}）を削除しますか？\n累計請求・累計入金からも除外されます。`,
+                          )
+                        )
+                          void actions.deleteContractCharges(c.id);
+                      }}
+                    >
+                      <RotateCcw />
+                    </button>
+                    <button
                       onClick={() => {
                         const charges = data.charges.filter(
                           (charge) => charge.contract_id === c.id,
@@ -308,28 +349,13 @@ export function ContractsPage() {
           initial={
             editing === "new"
               ? {
-                  ...blank,
+                  ...(newTemplate ?? blank),
                   contract_code: newCode,
-                  property_id: data.properties[0]?.id || "",
-                  unit_id: data.units[0]?.id || "",
+                  property_id:
+                    newTemplate?.property_id || data.properties[0]?.id || "",
+                  unit_id: newTemplate?.unit_id || data.units[0]?.id || "",
                 }
-              : {
-                  ...editing,
-                  tenant_phone: editing.tenant_phone || "",
-                  tenant_email: editing.tenant_email || "",
-                  tenant_address: editing.tenant_address || "",
-                  end_date: editing.end_date || "",
-                  renewal_date: editing.renewal_date || "",
-                  guarantor_start_date: editing.guarantor_start_date || "",
-                  guarantor_end_date: editing.guarantor_end_date || "",
-                  guarantor_renewal_date: editing.guarantor_renewal_date || "",
-                  cancellation_notice_date:
-                    editing.cancellation_notice_date || "",
-                  cancellation_planned_date:
-                    editing.cancellation_planned_date || "",
-                  cancellation_completed_date:
-                    editing.cancellation_completed_date || "",
-                }
+              : contractToForm(editing)
           }
           properties={data.properties}
           units={data.units}
@@ -352,6 +378,23 @@ export function ContractsPage() {
       )}
     </>
   );
+}
+
+function contractToForm(contract: Contract): Form {
+  return {
+    ...contract,
+    tenant_phone: contract.tenant_phone || "",
+    tenant_email: contract.tenant_email || "",
+    tenant_address: contract.tenant_address || "",
+    end_date: contract.end_date || "",
+    renewal_date: contract.renewal_date || "",
+    guarantor_start_date: contract.guarantor_start_date || "",
+    guarantor_end_date: contract.guarantor_end_date || "",
+    guarantor_renewal_date: contract.guarantor_renewal_date || "",
+    cancellation_notice_date: contract.cancellation_notice_date || "",
+    cancellation_planned_date: contract.cancellation_planned_date || "",
+    cancellation_completed_date: contract.cancellation_completed_date || "",
+  };
 }
 
 function ContractBackfillModal({
