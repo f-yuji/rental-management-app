@@ -1,5 +1,6 @@
 "use client";
 import { Download, Plus, X } from "lucide-react";
+import { useApp } from "@/components/app-provider";
 export function PageHeader({
   title,
   description,
@@ -45,6 +46,21 @@ export function Kpi({
 }
 export function Badge({ children }: { children: React.ReactNode }) {
   return <span className={`badge badge-${String(children)}`}>{children}</span>;
+}
+export function RecordSaveStatus({ recordKey }: { recordKey: string }) {
+  const { recordSaveStates, retryRecord } = useApp();
+  const state = recordSaveStates[recordKey];
+  if (!state || state === "idle" || state === "saved") return null;
+  return (
+    <span className="record-save-status">
+      <Badge>{state === "saving" ? "保存中" : "保存失敗"}</Badge>
+      {state === "error" && (
+        <button className="secondary" onClick={() => void retryRecord(recordKey)}>
+          再試行
+        </button>
+      )}
+    </span>
+  );
 }
 export function Modal({
   title,

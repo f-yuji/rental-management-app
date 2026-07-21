@@ -3,6 +3,7 @@ import {
   billingKey,
   calculateCharge,
   currentYield,
+  effectiveContractStatus,
   grossYield,
   isContractActiveInMonth,
   netAssets,
@@ -67,6 +68,13 @@ describe("請求計算", () => {
   });
 });
 describe("状態と期限", () => {
+  it("契約状態を日付から判定する", () => {
+    const today = new Date("2026-07-21T00:00:00");
+    expect(effectiveContractStatus(c("2026-08-01", null), today)).toBe("未開始");
+    expect(effectiveContractStatus(c("2026-01-01", null), today)).toBe("契約中");
+    expect(effectiveContractStatus(c("2026-01-01", "2026-08-01"), today)).toBe("終了予定");
+    expect(effectiveContractStatus(c("2026-01-01", "2026-06-30"), today)).toBe("終了");
+  });
   it("入金状態", () => {
     expect(paymentStatus(100, 0)).toBe("未入金");
     expect(paymentStatus(100, 40)).toBe("一部入金");

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Pencil, Search, Trash2 } from "lucide-react";
 import { useApp } from "@/components/app-provider";
-import { CsvButton, Modal, PageHeader } from "@/components/ui/shared";
+import { CsvButton, Modal, PageHeader, RecordSaveStatus } from "@/components/ui/shared";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { grossYield, netAssets, totalInvestment } from "@/lib/calculations";
 import { percent, yen } from "@/lib/format";
@@ -23,7 +23,7 @@ const blank = {
 };
 type Form = typeof blank;
 export function PropertiesPage() {
-  const { data, actions } = useApp();
+  const { data, actions, currentUserId } = useApp();
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Property | null | "new">(null);
   const [newCode, setNewCode] = useState("");
@@ -50,7 +50,7 @@ export function PropertiesPage() {
         ...form,
         acquisition_date: form.acquisition_date || null,
         id: crypto.randomUUID(),
-        user_id: "demo-user",
+        user_id: currentUserId,
         created_at: stamp,
         updated_at: stamp,
       });
@@ -146,6 +146,7 @@ export function PropertiesPage() {
                 <tr key={p.id}>
                   <td>
                     <b>{p.name}</b>
+                    <RecordSaveStatus recordKey={`property:${p.id}`} />
                     <small>{p.property_code}</small>
                   </td>
                   <td>

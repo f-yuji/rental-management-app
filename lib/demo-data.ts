@@ -1,6 +1,6 @@
 import type { AppData, Contract, MonthlyCharge, Property, Unit } from "@/types";
 const now = "2026-04-01T00:00:00.000Z",
-  uid = "demo-user";
+  uid = "";
 const property = (
   id: string,
   code: string,

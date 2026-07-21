@@ -50,6 +50,7 @@ npm run build
    - `supabase/migrations/004_remove_actual_monthly_rent.sql`
    - `supabase/migrations/005_operations_tasks_documents.sql`
    - `supabase/migrations/006_automatic_billing.sql`
+   - `supabase/migrations/007_reminder_and_relation_cleanup.sql`
 3. Authentication > Users > Add userからログインユーザーを作成します。
 4. `.env.local`へProject URL、anon key、service role keyを設定します。
 5. 必要なら`supabase/seed.sql`先頭のUUIDを作成したユーザーIDへ置換して実行します。
@@ -57,6 +58,8 @@ npm run build
 既存環境では未実行のmigrationを番号順に追加実行してください。`005`は契約の保証会社・口座・更新・解約項目、tasks、reminders、attachments、非公開の契約書類Storage bucketとRLSを追加します。主要コードは`user_id`単位の一意制約で保護されます。
 
 `006`を適用すると、ログイン時に当月の請求と入金を自動確認します。契約の「毎月の請求日」に請求を重複なく生成し、「毎月の入金予定日」に全額入金済みへ更新します。31日がない月は月末として扱います。請求・入金画面で手動修正した明細には`[手動管理]`が付き、その月は自動入金で上書きされません。
+
+`007`はリマインダーを固定資産税・その他の賃貸管理期限に限定し、旧「任意タスク」をタスクへ移行します。契約更新・終了・保証会社更新は契約日付から自動表示されます。物件・区画・契約を削除した際は、関連するタスクとリマインダーも削除されます。
 
 ## 保存仕様
 

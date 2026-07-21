@@ -2,7 +2,7 @@
 import { CheckCircle2, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useApp } from "@/components/app-provider";
-import { Badge, Modal, PageHeader } from "@/components/ui/shared";
+import { Badge, Modal, PageHeader, RecordSaveStatus } from "@/components/ui/shared";
 import type { RelatedEntityType, Task } from "@/types";
 const blank = {
   title: "",
@@ -15,7 +15,7 @@ const blank = {
 };
 type Form = typeof blank;
 export function TasksPage() {
-  const { data, actions } = useApp(),
+  const { data, actions, currentUserId } = useApp(),
     [editing, setEditing] = useState<Task | "new" | null>(null);
   const save = async (form: Form) => {
     if (!form.title.trim()) return alert("タイトルを入力してください");
@@ -30,7 +30,7 @@ export function TasksPage() {
       await actions.createTask({
         ...value,
         id: crypto.randomUUID(),
-        user_id: "demo-user",
+        user_id: currentUserId,
         created_at: now,
       });
     else await actions.updateTask((editing as Task).id, value);
@@ -79,6 +79,7 @@ export function TasksPage() {
                 </td>
                 <td>
                   <b>{task.title}</b>
+                  <RecordSaveStatus recordKey={`task:${task.id}`} />
                   <small>{task.description}</small>
                 </td>
                 <td>{task.due_date || "-"}</td>

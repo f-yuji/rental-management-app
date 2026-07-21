@@ -78,6 +78,9 @@ type Context = {
   mode: "supabase" | "demo";
   syncState: SaveState;
   saveError: string | null;
+  currentUserId: string;
+  recordSaveStates: Record<string, SaveState>;
+  retryRecord(key: string): Promise<void>;
   clearSaveError(): void;
 };
 const AppContext = createContext<Context | null>(null);
@@ -149,9 +152,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [userId, setUserId] = useState<string | null>(null);
   const [syncState, setSyncState] = useState<SaveState>("idle"),
     [saveError, setSaveError] = useState<string | null>(null);
+  const [recordSaveStates, setRecordSaveStates] = useState<Record<string, SaveState>>({});
   const authStarted = useRef(false),
     queues = useRef(new Map<string, Promise<void>>()),
-    timers = useRef(new Map<string, number>());
+    timers = useRef(new Map<string, number>()),
+    retries = useRef(new Map<string, () => Promise<void>>());
   const repository = useMemo(
     () => (supabase && userId ? createAppRepository(supabase, userId) : null),
     [supabase, userId],
@@ -292,15 +297,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const persist = useCallback(
     (key: string, operation: () => Promise<void>) => {
       if (!repository) return Promise.resolve();
+      retries.current.set(key, operation);
       setSyncState("saving");
+      setRecordSaveStates((states) => ({ ...states, [key]: "saving" }));
       setSaveError(null);
       const previous = queues.current.get(key) ?? Promise.resolve();
       const next = previous
         .catch(() => undefined)
         .then(operation)
-        .then(() => setSyncState("saved"))
+        .then(() => {
+          setSyncState("saved");
+          setRecordSaveStates((states) => ({ ...states, [key]: "saved" }));
+          retries.current.delete(key);
+        })
         .catch((error: unknown) => {
           setSyncState("error");
+          setRecordSaveStates((states) => ({ ...states, [key]: "error" }));
           setSaveError(
             error instanceof Error ? error.message : "保存に失敗しました",
           );
@@ -310,6 +322,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return next;
     },
     [repository],
+  );
+  const retryRecord = useCallback(
+    async (key: string) => {
+      const operation = retries.current.get(key);
+      if (operation) await persist(key, operation);
+    },
+    [persist],
   );
   const debounce = useCallback(
     (key: string, operation: () => Promise<void>) => {
@@ -405,6 +424,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 (c) => c.property_id === id && c.id === x.contract_id,
               ),
           ),
+          tasks: d.tasks.filter((x) => {
+            const unitIds = d.units.filter((u) => u.property_id === id).map((u) => u.id);
+            const contractIds = d.contracts.filter((c) => c.property_id === id).map((c) => c.id);
+            return !(
+              (x.related_type === "property" && x.related_id === id) ||
+              (x.related_type === "unit" && !!x.related_id && unitIds.includes(x.related_id)) ||
+              (x.related_type === "contract" && !!x.related_id && contractIds.includes(x.related_id))
+            );
+          }),
+          reminders: d.reminders.filter((x) => {
+            const unitIds = d.units.filter((u) => u.property_id === id).map((u) => u.id);
+            const contractIds = d.contracts.filter((c) => c.property_id === id).map((c) => c.id);
+            return !(
+              (x.related_type === "property" && x.related_id === id) ||
+              (x.related_type === "unit" && !!x.related_id && unitIds.includes(x.related_id)) ||
+              (x.related_type === "contract" && !!x.related_id && contractIds.includes(x.related_id))
+            );
+          }),
         }));
       },
       async createUnit(row) {
@@ -437,6 +474,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 (c) => c.unit_id === id && c.id === x.contract_id,
               ),
           ),
+          tasks: d.tasks.filter((x) => {
+            const contractIds = d.contracts.filter((c) => c.unit_id === id).map((c) => c.id);
+            return !((x.related_type === "unit" && x.related_id === id) ||
+              (x.related_type === "contract" && !!x.related_id && contractIds.includes(x.related_id)));
+          }),
+          reminders: d.reminders.filter((x) => {
+            const contractIds = d.contracts.filter((c) => c.unit_id === id).map((c) => c.id);
+            return !((x.related_type === "unit" && x.related_id === id) ||
+              (x.related_type === "contract" && !!x.related_id && contractIds.includes(x.related_id)));
+          }),
         }));
       },
       async createContract(row) {
@@ -463,6 +510,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           contracts: d.contracts.filter((x) => x.id !== id),
           charges: d.charges.filter((x) => x.contract_id !== id),
           attachments: d.attachments.filter((x) => x.contract_id !== id),
+          tasks: d.tasks.filter(
+            (x) => !(x.related_type === "contract" && x.related_id === id),
+          ),
+          reminders: d.reminders.filter(
+            (x) => !(x.related_type === "contract" && x.related_id === id),
+          ),
         }));
       },
       async createMonthlyCharge(row) {
@@ -540,7 +593,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (!repository) {
           add("attachments", {
             id: crypto.randomUUID(),
-            user_id: "demo-user",
+            user_id: userId ?? "",
             contract_id: contractId,
             category,
             file_name: file.name,
@@ -639,7 +692,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             : `C-${year ?? new Date().getFullYear()}-${String(n).padStart(4, "0")}`;
       },
     };
-  }, [debounce, persist, repository]);
+  }, [debounce, persist, repository, userId]);
 
   return (
     <AppContext.Provider
@@ -650,6 +703,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         mode,
         syncState,
         saveError,
+        currentUserId: userId ?? "",
+        recordSaveStates,
+        retryRecord,
         clearSaveError: () => setSaveError(null),
       }}
     >

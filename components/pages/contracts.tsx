@@ -3,9 +3,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { Eye, Pencil, Search, Trash2 } from "lucide-react";
 import { useApp } from "@/components/app-provider";
-import { Badge, CsvButton, Modal, PageHeader } from "@/components/ui/shared";
+import { Badge, CsvButton, Modal, PageHeader, RecordSaveStatus } from "@/components/ui/shared";
 import { NumericInput } from "@/components/ui/numeric-input";
-import { outstanding } from "@/lib/calculations";
+import { effectiveContractStatus, outstanding } from "@/lib/calculations";
 import { dateLabel, yen } from "@/lib/format";
 import type { Contract, ContractStatus, ContractType } from "@/types";
 const blank = {
@@ -54,7 +54,7 @@ const blank = {
 };
 type Form = typeof blank;
 export function ContractsPage() {
-  const { data, actions } = useApp();
+  const { data, actions, currentUserId } = useApp();
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Contract | null | "new">(null);
   const [newCode, setNewCode] = useState("");
@@ -117,7 +117,7 @@ export function ContractsPage() {
       await actions.createContract({
         ...value,
         id: crypto.randomUUID(),
-        user_id: "demo-user",
+        user_id: currentUserId,
         created_at: stamp,
         updated_at: stamp,
       });
@@ -219,6 +219,7 @@ export function ContractsPage() {
                   <td>
                     <b>{c.contract_code}</b>
                     <small>{c.contract_type}</small>
+                    <RecordSaveStatus recordKey={`contract:${c.id}`} />
                   </td>
                   <td>{c.tenant_name}</td>
                   <td>
@@ -235,7 +236,7 @@ export function ContractsPage() {
                     {yen(c.monthly_rent)}
                   </td>
                   <td>
-                    <Badge>{c.status}</Badge>
+                    <Badge>{effectiveContractStatus(c)}</Badge>
                   </td>
                   <td className="num" data-label="今月請求額">
                     {yen(b)}

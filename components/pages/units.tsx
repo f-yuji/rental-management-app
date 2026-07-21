@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Eye, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useApp } from "@/components/app-provider";
-import { Badge, CsvButton, Modal, PageHeader } from "@/components/ui/shared";
+import { Badge, CsvButton, Modal, PageHeader, RecordSaveStatus } from "@/components/ui/shared";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { yen } from "@/lib/format";
 import { percent } from "@/lib/format";
@@ -24,7 +24,7 @@ const blank = {
 };
 type Form = typeof blank;
 export function UnitsPage() {
-  const { data, actions } = useApp();
+  const { data, actions, currentUserId } = useApp();
   const [filter, setFilter] = useState("");
   const [editing, setEditing] = useState<Unit | null | "new">(null);
   const [newCode, setNewCode] = useState("");
@@ -57,7 +57,7 @@ export function UnitsPage() {
       await actions.createUnit({
         ...value,
         id: crypto.randomUUID(),
-        user_id: "demo-user",
+        user_id: currentUserId,
         created_at: stamp,
         updated_at: stamp,
       });
@@ -150,6 +150,7 @@ export function UnitsPage() {
                 <tr key={u.id}>
                   <td>
                     <b>{u.name}</b>
+                    <RecordSaveStatus recordKey={`unit:${u.id}`} />
                     <small>{u.unit_code}</small>
                   </td>
                   <td>

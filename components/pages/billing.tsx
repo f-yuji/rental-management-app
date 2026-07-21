@@ -8,6 +8,7 @@ import {
   Kpi,
   Modal,
   PageHeader,
+  RecordSaveStatus,
 } from "@/components/ui/shared";
 import {
   billingKey,
@@ -19,7 +20,7 @@ import { monthLabel, yen } from "@/lib/format";
 import { NumericInput } from "@/components/ui/numeric-input";
 import type { MonthlyCharge } from "@/types";
 export function BillingPage() {
-  const { data, actions } = useApp();
+  const { data, actions, currentUserId } = useApp();
   const [month, setMonth] = useState("2026-04");
   const [filter, setFilter] = useState("");
   const [editing, setEditing] = useState<MonthlyCharge | null>(null);
@@ -59,7 +60,7 @@ export function BillingPage() {
       const stamp = new Date().toISOString();
       const row: MonthlyCharge = {
         id: crypto.randomUUID(),
-        user_id: "demo-user",
+        user_id: currentUserId,
         billing_month: `${month}-01`,
         property_id: c.property_id,
         unit_id: c.unit_id,
@@ -199,6 +200,7 @@ export function BillingPage() {
                 <td>{c.payment_date || "-"}</td>
                 <td>
                   <Badge>{c.payment_status}</Badge>
+                  <RecordSaveStatus recordKey={`charge:${c.id}`} />
                 </td>
                 <td className="row-actions">
                   <button onClick={() => fullPay(c)} title="全額入金">

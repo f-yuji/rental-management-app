@@ -115,7 +115,7 @@ export type ReminderType =
   | "契約終了"
   | "保証会社更新"
   | "固定資産税"
-  | "任意タスク"
+  | "その他"
   | string;
 export interface Reminder {
   id: string;

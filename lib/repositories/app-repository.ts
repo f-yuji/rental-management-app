@@ -85,11 +85,33 @@ export function createAppRepository(client: SupabaseClient, userId: string) {
       .eq("user_id", userId);
     assertOk(error);
   };
+  const removeRelated = async (type: string, ids: string[]) => {
+    if (!ids.length) return;
+    for (const table of ["tasks", "reminders"]) {
+      const { error } = await client
+        .from(table)
+        .delete()
+        .eq("user_id", userId)
+        .eq("related_type", type)
+        .in("related_id", ids);
+      assertOk(error);
+    }
+  };
   return {
     createProperty: (row: Property) => insert("properties", row),
     updateProperty: (id: string, patch: Partial<Property>) =>
       update("properties", id, patch),
     deleteProperty: async (id: string) => {
+      const [{ data: units, error: unitReadError }, { data: contracts, error: contractReadError }] =
+        await Promise.all([
+          client.from("units").select("id").eq("property_id", id).eq("user_id", userId),
+          client.from("contracts").select("id").eq("property_id", id).eq("user_id", userId),
+        ]);
+      assertOk(unitReadError);
+      assertOk(contractReadError);
+      await removeRelated("contract", (contracts ?? []).map((row) => row.id));
+      await removeRelated("unit", (units ?? []).map((row) => row.id));
+      await removeRelated("property", [id]);
       assertOk(
         (
           await client
@@ -123,6 +145,14 @@ export function createAppRepository(client: SupabaseClient, userId: string) {
     updateUnit: (id: string, patch: Partial<Unit>) =>
       update("units", id, patch),
     deleteUnit: async (id: string) => {
+      const { data: contracts, error: contractReadError } = await client
+        .from("contracts")
+        .select("id")
+        .eq("unit_id", id)
+        .eq("user_id", userId);
+      assertOk(contractReadError);
+      await removeRelated("contract", (contracts ?? []).map((row) => row.id));
+      await removeRelated("unit", [id]);
       assertOk(
         (
           await client
@@ -147,6 +177,7 @@ export function createAppRepository(client: SupabaseClient, userId: string) {
     updateContract: (id: string, patch: Partial<Contract>) =>
       update("contracts", id, patch),
     deleteContract: async (id: string) => {
+      await removeRelated("contract", [id]);
       const { data: documents, error: documentReadError } = await client
         .from("attachments")
         .select("storage_path")

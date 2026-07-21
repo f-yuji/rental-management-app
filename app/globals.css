@@ -313,6 +313,21 @@ tr:last-child td {
   font-size: 12px;
   font-weight: 700;
 }
+.record-save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.record-save-status .secondary {
+  min-height: 28px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.badge-保存失敗 {
+  color: #b42318;
+  background: #fee4e2;
+}
 .badge-未入金,
 .badge-空き {
   background: #feeceb;

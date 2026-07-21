@@ -47,6 +47,22 @@ export const paymentStatus = (billed: number, paid: number): PaymentStatus =>
   paid <= 0 ? "未入金" : paid < billed ? "一部入金" : "入金済";
 export const billingKey = (month: string, contractId: string) =>
   `${month.slice(0, 7)}|${contractId}`;
+
+export type EffectiveContractStatus = "未開始" | "契約中" | "終了予定" | "終了" | "解約" | "下書き";
+export function effectiveContractStatus(
+  contract: Pick<Contract, "start_date" | "end_date" | "status">,
+  today = new Date(),
+): EffectiveContractStatus {
+  if (contract.status === "下書き" || contract.status === "解約")
+    return contract.status;
+  const current = startOfDay(today);
+  const start = parseISO(contract.start_date);
+  const end = contract.end_date ? parseISO(contract.end_date) : null;
+  if (isBefore(current, start)) return "未開始";
+  if (end && isAfter(current, end)) return "終了";
+  if (end && differenceInCalendarDays(end, current) <= 30) return "終了予定";
+  return "契約中";
+}
 export const paymentDueDate = (month: string, dueDay: number) => {
   const first = startOfMonth(parseISO(month));
   return setDate(first, Math.min(Math.max(dueDay, 1), getDaysInMonth(first)));

@@ -4,6 +4,7 @@ import { Badge, Kpi, PageHeader } from "@/components/ui/shared";
 import {
   grossYield,
   cumulativeTotals,
+  effectiveContractStatus,
   netAssets,
   renewalReminder,
   totalInvestment,
@@ -11,8 +12,8 @@ import {
 import { dateLabel, percent, yen } from "@/lib/format";
 export function Dashboard() {
   const { data } = useApp();
-  const active = data.contracts.filter(
-    (c) => c.status === "契約中" || c.status === "終了予定",
+  const active = data.contracts.filter((c) =>
+    ["契約中", "終了予定"].includes(effectiveContractStatus(c)),
   );
   const current = active.reduce((s, c) => s + c.monthly_rent, 0);
   const full = data.units
@@ -53,7 +54,7 @@ export function Dashboard() {
   const deadlines = [
     ...data.contracts
       .flatMap((contract) =>
-        ["契約中", "終了予定"].includes(contract.status)
+        ["契約中", "終了予定"].includes(effectiveContractStatus(contract))
           ? [
               {
                 id: `contract-renewal-${contract.id}`,
@@ -78,7 +79,10 @@ export function Dashboard() {
       )
       .flat(),
     ...data.reminders
-      .filter((row) => !row.completed)
+      .filter(
+        (row) =>
+          !row.completed && ["固定資産税", "その他"].includes(row.reminder_type),
+      )
       .map((row) => ({
         id: `manual-${row.id}`,
         type: row.reminder_type,
@@ -112,11 +116,6 @@ export function Dashboard() {
         title="ダッシュボード"
         description="資産・契約・入金状況をまとめて確認"
       />
-      <div className="period-tabs">
-        <button className="active">今月</button>
-        <button>今年</button>
-        <button>全期間</button>
-      </div>
       <div className="kpi-grid">
         <Kpi label="現在月収" value={yen(current)} sub="有効契約の合計" />
         <Kpi label="満室月収" value={yen(full)} sub="使用停止を除く" />
@@ -149,7 +148,7 @@ export function Dashboard() {
         <Kpi label="年間税額合計" value={yen(annualTax)} />
         <Kpi label="月平均税負担" value={yen(Math.round(annualTax / 12))} />
         <Kpi
-          label="税引後年間CF"
+          label="年間賃料−固定資産税"
           value={yen(current * 12 - annualTax)}
           sub="現在月収×12－年間固定資産税"
         />
@@ -207,7 +206,7 @@ export function Dashboard() {
                 </div>
               ))}
             {data.contracts
-              .filter((c) => c.status === "終了予定")
+              .filter((c) => effectiveContractStatus(c) === "終了予定")
               .map((c) => (
                 <div key={c.id}>
                   <Badge>終了予定</Badge>
@@ -298,7 +297,7 @@ export function Dashboard() {
           <div className="simple-list">
             {recentContracts.map((contract) => (
               <div key={contract.id}>
-                <Badge>{contract.status}</Badge>
+                <Badge>{effectiveContractStatus(contract)}</Badge>
                 <span>
                   {contract.tenant_name}
                   <small>

@@ -2,18 +2,12 @@
 import { Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useApp } from "@/components/app-provider";
-import { Badge, Modal, PageHeader } from "@/components/ui/shared";
+import { Badge, Modal, PageHeader, RecordSaveStatus } from "@/components/ui/shared";
 import { renewalReminder } from "@/lib/calculations";
 import type { Reminder, ReminderType, RelatedEntityType } from "@/types";
-const types: ReminderType[] = [
-  "契約更新",
-  "契約終了",
-  "保証会社更新",
-  "固定資産税",
-  "任意タスク",
-];
+const types: ReminderType[] = ["固定資産税", "その他"];
 const blank = {
-  reminder_type: "任意タスク" as ReminderType,
+  reminder_type: "固定資産税" as ReminderType,
   title: "",
   due_date: "",
   related_type: "free" as RelatedEntityType,
@@ -23,9 +17,11 @@ const blank = {
 };
 type Form = typeof blank;
 export function RemindersPage() {
-  const { data, actions } = useApp(),
+  const { data, actions, currentUserId } = useApp(),
     [editing, setEditing] = useState<Reminder | "new" | null>(null);
   const save = async (f: Form) => {
+    if (!types.includes(f.reminder_type))
+      return alert("契約期限は契約情報から自動表示されるため、手動登録できません");
     if (!f.title || !f.due_date) return alert("タイトルと期限日は必須です");
     const now = new Date().toISOString(),
       value = { ...f, related_id: f.related_id || null, updated_at: now };
@@ -33,7 +29,7 @@ export function RemindersPage() {
       await actions.createReminder({
         ...value,
         id: crypto.randomUUID(),
-        user_id: "demo-user",
+        user_id: currentUserId,
         created_at: now,
       });
     else await actions.updateReminder((editing as Reminder).id, value);
@@ -72,6 +68,8 @@ export function RemindersPage() {
                   </td>
                   <td>
                     <b>{r.title}</b>
+                    <RecordSaveStatus recordKey={`reminder:${r.id}`} />
+                    <small>{relatedLabel(r.related_type, r.related_id, data)}</small>
                     <small>{r.notes}</small>
                   </td>
                   <td>{r.due_date}</td>
@@ -108,12 +106,13 @@ export function RemindersPage() {
         </table>
       </div>
       {editing && (
-        <ReminderForm
+          <ReminderForm
           initial={
             editing === "new"
               ? blank
               : { ...editing, related_id: editing.related_id || "" }
           }
+          data={data}
           onClose={() => setEditing(null)}
           onSave={save}
         />
@@ -121,16 +120,43 @@ export function RemindersPage() {
     </>
   );
 }
+
+function relatedLabel(
+  type: RelatedEntityType,
+  id: string | null,
+  data: ReturnType<typeof useApp>["data"],
+) {
+  if (!id) return type === "free" ? "自由" : "関連先なし";
+  const name =
+    type === "property"
+      ? data.properties.find((x) => x.id === id)?.name
+      : type === "unit"
+        ? data.units.find((x) => x.id === id)?.name
+        : type === "contract"
+          ? data.contracts.find((x) => x.id === id)?.tenant_name
+          : undefined;
+  return `${{ property: "物件", unit: "区画", contract: "契約", construction: "工事", free: "自由" }[type]} ${name ?? "削除済み"}`;
+}
 function ReminderForm({
   initial,
+  data,
   onClose,
   onSave,
 }: {
   initial: Form;
+  data: ReturnType<typeof useApp>["data"];
   onClose: () => void;
   onSave: (f: Form) => void;
 }) {
   const [f, setF] = useState(initial);
+  const options =
+    f.related_type === "property"
+      ? data.properties.map((x) => ({ id: x.id, name: x.name }))
+      : f.related_type === "unit"
+        ? data.units.map((x) => ({ id: x.id, name: x.name }))
+        : f.related_type === "contract"
+          ? data.contracts.map((x) => ({ id: x.id, name: x.tenant_name }))
+          : [];
   return (
     <Modal title="期限を登録" onClose={onClose}>
       <form
@@ -158,6 +184,47 @@ function ReminderForm({
               onChange={(e) => setF({ ...f, title: e.target.value })}
             />
           </label>
+          <label>
+            関連
+            <select
+              value={f.related_type}
+              onChange={(e) =>
+                setF({
+                  ...f,
+                  related_type: e.target.value as RelatedEntityType,
+                  related_id: "",
+                })
+              }
+            >
+              <option value="property">物件</option>
+              <option value="unit">区画</option>
+              <option value="contract">契約</option>
+              <option value="free">自由</option>
+            </select>
+          </label>
+          {options.length > 0 && (
+            <label>
+              関連先
+              <select
+                value={f.related_id}
+                onChange={(e) => {
+                  const selected = options.find((x) => x.id === e.target.value);
+                  setF({
+                    ...f,
+                    related_id: e.target.value,
+                    title: selected
+                      ? `${f.reminder_type} ${selected.name}`
+                      : f.title,
+                  });
+                }}
+              >
+                <option value="">選択なし</option>
+                {options.map((x) => (
+                  <option key={x.id} value={x.id}>{x.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             期限日
             <input
