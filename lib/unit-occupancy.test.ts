@@ -27,4 +27,23 @@ describe("unit occupancy", () => {
     expect(result.cumulativeVacancyDays).toBe(10);
     expect(result.occupancyRate).toBe(0.5);
   });
+  it("keeps contract duration across a renewal", () => {
+    const previous = {
+      ...contract("2024-01-01", "2025-12-31", "終了"),
+      id: "old",
+      termination_reason: "更新による終了",
+    } as Contract;
+    const current = {
+      ...contract("2026-01-01", null),
+      id: "new",
+      termination_reason: "",
+    } as Contract;
+    const result = unitOccupancyMetrics(
+      [previous, current],
+      "2024-01-01",
+      new Date(2026, 6, 21),
+    );
+    expect(result.contractDuration).toContain("2年");
+    expect(result.cumulativeVacancyDays).toBe(0);
+  });
 });

@@ -30,9 +30,32 @@ export function unitOccupancyMetrics(
         );
       })
       .sort((a, b) => b.start_date.localeCompare(a.start_date))[0];
-  const contractDuration = active
+  let continuousStart = active?.start_date ?? null;
+  if (active && continuousStart) {
+    const visited = new Set([active.id]);
+    while (true) {
+      const previous = contracts
+        .filter((contract) => {
+          const end = effectiveEnd(contract);
+          return (
+            !visited.has(contract.id) &&
+            contract.termination_reason === "更新による終了" &&
+            !!end &&
+            differenceInCalendarDays(
+              parseISO(continuousStart as string),
+              parseISO(end),
+            ) === 1
+          );
+        })
+        .sort((a, b) => (effectiveEnd(b) ?? "").localeCompare(effectiveEnd(a) ?? ""))[0];
+      if (!previous) break;
+      visited.add(previous.id);
+      continuousStart = previous.start_date;
+    }
+  }
+  const contractDuration = active && continuousStart
     ? formatDuration(
-        intervalToDuration({ start: parseISO(active.start_date), end: now }),
+        intervalToDuration({ start: parseISO(continuousStart), end: now }),
         { format: ["years", "months"], locale: ja },
       ) || "1カ月未満"
     : "-";

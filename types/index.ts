@@ -68,6 +68,7 @@ export interface Contract {
   status: ContractStatus;
   deposit_amount: number;
   renewal_date: string | null;
+  termination_reason: string;
   renewal_method: string;
   auto_renew: boolean;
   requires_recontract: boolean;

@@ -134,6 +134,7 @@ const contract = (
   contract_type: type,
   status,
   deposit_amount: 0,
+  termination_reason: "",
   renewal_date: null,
   renewal_method: "",
   auto_renew: false,

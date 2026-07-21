@@ -31,6 +31,7 @@ const blank = {
   status: "契約中" as ContractStatus,
   deposit_amount: 0,
   renewal_date: "",
+  termination_reason: "",
   renewal_method: "",
   auto_renew: false,
   requires_recontract: false,
@@ -870,6 +871,21 @@ function ContractForm({
               {["契約中", "終了予定", "終了", "解約", "下書き"].map((x) => (
                 <option key={x}>{x}</option>
               ))}
+            </select>
+          </label>
+          <label>
+            終了理由
+            <select
+              value={f.termination_reason}
+              onChange={(e) =>
+                setF({ ...f, termination_reason: e.target.value })
+              }
+            >
+              <option value="">未設定</option>
+              <option>更新による終了</option>
+              <option>退去</option>
+              <option>解約</option>
+              <option>その他</option>
             </select>
           </label>
           <label>

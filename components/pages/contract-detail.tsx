@@ -63,6 +63,7 @@ export function ContractDetailPage() {
         <dl className="detail-grid">
           {field("契約開始", dateLabel(contract.start_date))}
           {field("契約終了", dateLabel(contract.end_date))}
+          {field("終了理由", contract.termination_reason)}
           {field("月額賃料", yen(contract.monthly_rent))}
           {field("更新日", dateLabel(contract.renewal_date))}
           {field("更新方式", contract.renewal_method)}
