@@ -1,8 +1,10 @@
 "use client";
 import { useState } from "react";
-import { Pencil, Search, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Eye, Pencil, Search, Trash2 } from "lucide-react";
 import { useApp } from "@/components/app-provider";
 import { Badge, CsvButton, Modal, PageHeader } from "@/components/ui/shared";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { outstanding } from "@/lib/calculations";
 import { dateLabel, yen } from "@/lib/format";
 import type { Contract, ContractStatus, ContractType } from "@/types";
@@ -23,17 +25,59 @@ const blank = {
   status: "契約中" as ContractStatus,
   deposit_amount: 0,
   renewal_date: "",
+  renewal_method: "",
+  auto_renew: false,
+  requires_recontract: false,
+  renewal_cycle_months: 12 as number | null,
+  renewal_fee: 0,
+  guarantor_enabled: false,
+  guarantor_company_name: "",
+  guarantor_contract_number: "",
+  guarantor_start_date: "",
+  guarantor_end_date: "",
+  guarantor_renewal_date: "",
+  guarantor_fee: 0,
+  guarantor_notes: "",
+  bank_name: "",
+  bank_branch: "",
+  bank_account_type: "普通",
+  bank_account_number: "",
+  bank_account_holder: "",
+  transfer_name: "",
+  cancellation_notice_date: "",
+  cancellation_planned_date: "",
+  cancellation_completed_date: "",
+  restoration_cost: 0,
+  deposit_refund: 0,
+  cancellation_notes: "",
   notes: "",
 };
 type Form = typeof blank;
 export function ContractsPage() {
-  const { data, setData } = useApp();
+  const { data, actions } = useApp();
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Contract | null | "new">(null);
+  const [newCode, setNewCode] = useState("");
   const list = data.contracts.filter(
     (c) => c.tenant_name.includes(query) || c.contract_code.includes(query),
   );
-  const save = (f: Form) => {
+  const save = async (f: Form) => {
+    f = { ...f, contract_code: f.contract_code.trim().toUpperCase() };
+    if (f.cancellation_completed_date) {
+      f = {
+        ...f,
+        end_date: f.end_date || f.cancellation_completed_date,
+        status: "解約",
+      };
+    } else if (f.cancellation_planned_date && !f.end_date) {
+      f = { ...f, end_date: f.cancellation_planned_date, status: "終了予定" };
+    }
+    if (!f.contract_code)
+      f.contract_code = await actions.nextCode(
+        "contract",
+        undefined,
+        Number(f.start_date.slice(0, 4)) || new Date().getFullYear(),
+      );
     if (!f.contract_code || !f.tenant_name || !f.start_date)
       return alert("契約コード、契約者、開始日は必須です");
     if (f.end_date && f.end_date < f.start_date)
@@ -62,27 +106,26 @@ export function ContractsPage() {
         tenant_address: f.tenant_address || null,
         end_date: f.end_date || null,
         renewal_date: f.renewal_date || null,
+        guarantor_start_date: f.guarantor_start_date || null,
+        guarantor_end_date: f.guarantor_end_date || null,
+        guarantor_renewal_date: f.guarantor_renewal_date || null,
+        cancellation_notice_date: f.cancellation_notice_date || null,
+        cancellation_planned_date: f.cancellation_planned_date || null,
+        cancellation_completed_date: f.cancellation_completed_date || null,
       };
-    setData((d) => ({
-      ...d,
-      contracts:
-        editing === "new"
-          ? [
-              ...d.contracts,
-              {
-                ...value,
-                id: crypto.randomUUID(),
-                user_id: "demo-user",
-                created_at: stamp,
-                updated_at: stamp,
-              },
-            ]
-          : d.contracts.map((c) =>
-              c.id === (editing as Contract).id
-                ? { ...c, ...value, updated_at: stamp }
-                : c,
-            ),
-    }));
+    if (editing === "new")
+      await actions.createContract({
+        ...value,
+        id: crypto.randomUUID(),
+        user_id: "demo-user",
+        created_at: stamp,
+        updated_at: stamp,
+      });
+    else
+      await actions.updateContract((editing as Contract).id, {
+        ...value,
+        updated_at: stamp,
+      });
     setEditing(null);
   };
   return (
@@ -90,7 +133,14 @@ export function ContractsPage() {
       <PageHeader
         title="契約"
         description="契約履歴と未収状況を管理"
-        action={() => setEditing("new")}
+        action={() => {
+          void actions
+            .nextCode("contract", undefined, new Date().getFullYear())
+            .then((code) => {
+              setNewCode(code);
+              setEditing("new");
+            });
+        }}
       />
       <div className="toolbar">
         <label className="search">
@@ -114,6 +164,9 @@ export function ContractsPage() {
               "月額賃料",
               "種別",
               "状態",
+              "銀行名",
+              "支店",
+              "口座末尾4桁",
             ],
             ...list.map((c) => [
               c.contract_code,
@@ -125,6 +178,9 @@ export function ContractsPage() {
               c.monthly_rent,
               c.contract_type,
               c.status,
+              c.bank_name,
+              c.bank_branch,
+              c.bank_account_number.slice(-4),
             ]),
           ]}
         />
@@ -139,15 +195,22 @@ export function ContractsPage() {
               <th>期間</th>
               <th className="num">月額賃料</th>
               <th>状態</th>
-              <th className="num">累計請求</th>
+              <th className="num">今月請求額</th>
+              <th className="num">今月入金額</th>
               <th className="num">未収</th>
+              <th>振込先</th>
               <th />
             </tr>
           </thead>
           <tbody>
             {list.map((c) => {
-              const charges = data.charges.filter(
-                  (x) => x.contract_id === c.id,
+              const currentMonth = new Date()
+                  .toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" })
+                  .slice(0, 7),
+                charges = data.charges.filter(
+                  (x) =>
+                    x.contract_id === c.id &&
+                    x.billing_month.startsWith(currentMonth),
                 ),
                 b = charges.reduce((s, x) => s + x.billed_amount, 0),
                 p = charges.reduce((s, x) => s + x.paid_amount, 0);
@@ -168,13 +231,34 @@ export function ContractsPage() {
                     {dateLabel(c.start_date)}
                     <small>〜 {dateLabel(c.end_date)}</small>
                   </td>
-                  <td className="num">{yen(c.monthly_rent)}</td>
+                  <td className="num" data-label="月額賃料">
+                    {yen(c.monthly_rent)}
+                  </td>
                   <td>
                     <Badge>{c.status}</Badge>
                   </td>
-                  <td className="num">{yen(b)}</td>
-                  <td className="num danger-text">{yen(outstanding(b, p))}</td>
+                  <td className="num" data-label="今月請求額">
+                    {yen(b)}
+                  </td>
+                  <td className="num" data-label="今月入金額">
+                    {yen(p)}
+                  </td>
+                  <td className="num danger-text" data-label="未収額">
+                    {yen(outstanding(b, p))}
+                  </td>
+                  <td>
+                    {c.bank_name || "-"}
+                    <small>
+                      {c.bank_branch || "-"} /{" "}
+                      {c.bank_account_number
+                        ? `****${c.bank_account_number.slice(-4)}`
+                        : "-"}
+                    </small>
+                  </td>
                   <td className="row-actions">
+                    <Link href={`/contracts/${c.id}`} title="詳細">
+                      <Eye />
+                    </Link>
                     <button onClick={() => setEditing(c)} title="編集">
                       <Pencil />
                     </button>
@@ -191,15 +275,7 @@ export function ContractsPage() {
                             `${c.contract_code}（${c.tenant_name}）を削除しますか？${related}\n通常の契約終了ではなく、履歴を完全に削除します。`,
                           )
                         )
-                          setData((d) => ({
-                            ...d,
-                            contracts: d.contracts.filter(
-                              (x) => x.id !== c.id,
-                            ),
-                            charges: d.charges.filter(
-                              (x) => x.contract_id !== c.id,
-                            ),
-                          }));
+                          void actions.deleteContract(c.id);
                       }}
                       title="契約履歴を削除"
                     >
@@ -214,10 +290,12 @@ export function ContractsPage() {
       </div>
       {editing && (
         <ContractForm
+          isNew={editing === "new"}
           initial={
             editing === "new"
               ? {
                   ...blank,
+                  contract_code: newCode,
                   property_id: data.properties[0]?.id || "",
                   unit_id: data.units[0]?.id || "",
                 }
@@ -228,6 +306,15 @@ export function ContractsPage() {
                   tenant_address: editing.tenant_address || "",
                   end_date: editing.end_date || "",
                   renewal_date: editing.renewal_date || "",
+                  guarantor_start_date: editing.guarantor_start_date || "",
+                  guarantor_end_date: editing.guarantor_end_date || "",
+                  guarantor_renewal_date: editing.guarantor_renewal_date || "",
+                  cancellation_notice_date:
+                    editing.cancellation_notice_date || "",
+                  cancellation_planned_date:
+                    editing.cancellation_planned_date || "",
+                  cancellation_completed_date:
+                    editing.cancellation_completed_date || "",
                 }
           }
           properties={data.properties}
@@ -240,12 +327,14 @@ export function ContractsPage() {
   );
 }
 function ContractForm({
+  isNew,
   initial,
   properties,
   units,
   onClose,
   onSave,
 }: {
+  isNew: boolean;
   initial: Form;
   properties: { id: string; name: string }[];
   units: { id: string; property_id: string; name: string }[];
@@ -255,10 +344,7 @@ function ContractForm({
   const [f, setF] = useState(initial);
   const available = units.filter((u) => u.property_id === f.property_id);
   return (
-    <Modal
-      title={f.contract_code ? "契約を編集" : "契約を登録"}
-      onClose={onClose}
-    >
+    <Modal title={isNew ? "契約を登録" : "契約を編集"} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -332,12 +418,256 @@ function ContractForm({
           </label>
           <label>
             月額賃料
-            <input
-              type="number"
-              min="0"
+            <NumericInput
               value={f.monthly_rent}
+              format="currency"
+              decimalScale={0}
+              suffix="円"
+              onChange={(value) => setF({ ...f, monthly_rent: value })}
+            />
+          </label>
+          <label>
+            更新日
+            <input
+              type="date"
+              value={f.renewal_date}
+              onChange={(e) => setF({ ...f, renewal_date: e.target.value })}
+            />
+          </label>
+          <h3 className="form-section-title">更新条件</h3>
+          <label>
+            更新方式
+            <input
+              value={f.renewal_method}
+              onChange={(e) => setF({ ...f, renewal_method: e.target.value })}
+              placeholder="例: 1年ごとの自動更新"
+            />
+          </label>
+          <label>
+            更新周期（月）
+            <NumericInput
+              value={f.renewal_cycle_months ?? 0}
+              decimalScale={0}
+              onChange={(value) =>
+                setF({ ...f, renewal_cycle_months: value || null })
+              }
+            />
+          </label>
+          <label>
+            更新料
+            <NumericInput
+              value={f.renewal_fee}
+              format="currency"
+              suffix="円"
+              onChange={(value) => setF({ ...f, renewal_fee: value })}
+            />
+          </label>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={f.auto_renew}
+              onChange={(e) => setF({ ...f, auto_renew: e.target.checked })}
+            />
+            自動更新
+          </label>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={f.requires_recontract}
               onChange={(e) =>
-                setF({ ...f, monthly_rent: Number(e.target.value) })
+                setF({ ...f, requires_recontract: e.target.checked })
+              }
+            />
+            要再契約
+          </label>
+          <h3 className="form-section-title">保証会社</h3>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={f.guarantor_enabled}
+              onChange={(e) =>
+                setF({ ...f, guarantor_enabled: e.target.checked })
+              }
+            />
+            保証会社を利用
+          </label>
+          <label>
+            保証会社名
+            <input
+              value={f.guarantor_company_name}
+              onChange={(e) =>
+                setF({ ...f, guarantor_company_name: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            保証契約番号
+            <input
+              value={f.guarantor_contract_number}
+              onChange={(e) =>
+                setF({ ...f, guarantor_contract_number: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            保証開始日
+            <input
+              type="date"
+              value={f.guarantor_start_date}
+              onChange={(e) =>
+                setF({ ...f, guarantor_start_date: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            保証終了日
+            <input
+              type="date"
+              value={f.guarantor_end_date}
+              onChange={(e) =>
+                setF({ ...f, guarantor_end_date: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            保証会社更新日
+            <input
+              type="date"
+              value={f.guarantor_renewal_date}
+              onChange={(e) =>
+                setF({ ...f, guarantor_renewal_date: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            保証料
+            <NumericInput
+              value={f.guarantor_fee}
+              format="currency"
+              suffix="円"
+              onChange={(value) => setF({ ...f, guarantor_fee: value })}
+            />
+          </label>
+          <label className="form-span">
+            保証会社メモ
+            <textarea
+              value={f.guarantor_notes}
+              onChange={(e) => setF({ ...f, guarantor_notes: e.target.value })}
+            />
+          </label>
+          <h3 className="form-section-title">振込先口座</h3>
+          <label>
+            銀行
+            <input
+              value={f.bank_name}
+              onChange={(e) => setF({ ...f, bank_name: e.target.value })}
+            />
+          </label>
+          <label>
+            支店
+            <input
+              value={f.bank_branch}
+              onChange={(e) => setF({ ...f, bank_branch: e.target.value })}
+            />
+          </label>
+          <label>
+            口座種別
+            <select
+              value={f.bank_account_type}
+              onChange={(e) =>
+                setF({ ...f, bank_account_type: e.target.value })
+              }
+            >
+              <option>普通</option>
+              <option>当座</option>
+              <option>貯蓄</option>
+              <option>その他</option>
+            </select>
+          </label>
+          <label>
+            口座番号
+            <input
+              inputMode="numeric"
+              value={f.bank_account_number}
+              onChange={(e) =>
+                setF({
+                  ...f,
+                  bank_account_number: e.target.value.replace(/\D/g, ""),
+                })
+              }
+            />
+          </label>
+          <label>
+            口座名義
+            <input
+              value={f.bank_account_holder}
+              onChange={(e) =>
+                setF({ ...f, bank_account_holder: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            振込名義
+            <input
+              value={f.transfer_name}
+              onChange={(e) => setF({ ...f, transfer_name: e.target.value })}
+            />
+          </label>
+          <h3 className="form-section-title">解約管理</h3>
+          <label>
+            解約通知日
+            <input
+              type="date"
+              value={f.cancellation_notice_date}
+              onChange={(e) =>
+                setF({ ...f, cancellation_notice_date: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            解約予定日
+            <input
+              type="date"
+              value={f.cancellation_planned_date}
+              onChange={(e) =>
+                setF({ ...f, cancellation_planned_date: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            解約完了日
+            <input
+              type="date"
+              value={f.cancellation_completed_date}
+              onChange={(e) =>
+                setF({ ...f, cancellation_completed_date: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            原状回復費
+            <NumericInput
+              value={f.restoration_cost}
+              format="currency"
+              suffix="円"
+              onChange={(value) => setF({ ...f, restoration_cost: value })}
+            />
+          </label>
+          <label>
+            保証金返還
+            <NumericInput
+              value={f.deposit_refund}
+              format="currency"
+              suffix="円"
+              onChange={(value) => setF({ ...f, deposit_refund: value })}
+            />
+          </label>
+          <label className="form-span">
+            解約備考
+            <textarea
+              value={f.cancellation_notes}
+              onChange={(e) =>
+                setF({ ...f, cancellation_notes: e.target.value })
               }
             />
           </label>
@@ -369,13 +699,14 @@ function ContractForm({
           </label>
           <label>
             入金期限日
-            <input
-              type="number"
-              min="1"
-              max="31"
+            <NumericInput
               value={f.payment_due_day}
-              onChange={(e) =>
-                setF({ ...f, payment_due_day: Number(e.target.value) })
+              decimalScale={0}
+              onChange={(value) =>
+                setF({
+                  ...f,
+                  payment_due_day: Math.min(31, Math.max(1, value)),
+                })
               }
             />
           </label>

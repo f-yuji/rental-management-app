@@ -1,12 +1,127 @@
 "use client";
-import Link from "next/link"; import { usePathname } from "next/navigation";
-import { Building2, Calculator, ChartNoAxesCombined, FileText, LandPlot, LayoutDashboard, LogOut, Menu, ReceiptJapaneseYen, Settings, X } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  Building2,
+  Calculator,
+  ChartNoAxesCombined,
+  FileText,
+  LandPlot,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  ReceiptJapaneseYen,
+  ListTodo,
+  BellRing,
+  Settings,
+  X,
+} from "lucide-react";
 import { useState } from "react";
 import { useApp } from "@/components/app-provider";
 import { createClient } from "@/lib/supabase/client";
-const links=[{href:"/",label:"ダッシュボード",icon:LayoutDashboard},{href:"/properties",label:"物件",icon:Building2},{href:"/units",label:"区画",icon:LandPlot},{href:"/contracts",label:"契約",icon:FileText},{href:"/billing",label:"請求・入金",icon:ReceiptJapaneseYen},{href:"/purchase-analysis",label:"購入検討",icon:Calculator},{href:"/reports/annual",label:"年間一覧",icon:ChartNoAxesCombined},{href:"/settings",label:"設定",icon:Settings}];
-export function AppShell({children}:{children:React.ReactNode}){const path=usePathname();const [open,setOpen]=useState(false);const {mode,syncState}=useApp();return <div className="app-frame">
-  <aside className={`sidebar ${open?"open":""}`}><div className="brand"><div className="brand-mark">RM</div><div><b>賃貸管理</b><small>個人用ポートフォリオ</small></div><button className="mobile-close" onClick={()=>setOpen(false)}><X/></button></div><nav>{links.map(({href,label,icon:Icon})=><Link key={href} href={href} onClick={()=>setOpen(false)} className={path===href?"active":""}><Icon size={19}/><span>{label}</span></Link>)}</nav><div className="sidebar-footer"><div className="mode-note"><span className={`status-dot ${syncState}`}/>{mode==="supabase"?(syncState==="saving"?"保存中...":syncState==="error"?"保存エラー":"同期済み"):"デモモード"}</div>{mode==="supabase"&&<button className="logout-button" onClick={async()=>{await createClient()?.auth.signOut();location.href="/login"}}><LogOut/>ログアウト</button>}</div></aside>
-  <header className="mobile-header"><button onClick={()=>setOpen(true)}><Menu/></button><b>賃貸管理</b></header>{open&&<button className="scrim" onClick={()=>setOpen(false)} aria-label="閉じる"/>}
-  <main className="main">{children}</main><nav className="bottom-nav">{links.slice(0,5).map(({href,label,icon:Icon})=><Link key={href} href={href} className={path===href?"active":""}><Icon/><span>{label}</span></Link>)}</nav>
-  </div>}
+const links = [
+  { href: "/", label: "ダッシュボード", icon: LayoutDashboard },
+  { href: "/properties", label: "物件", icon: Building2 },
+  { href: "/units", label: "区画", icon: LandPlot },
+  { href: "/contracts", label: "契約", icon: FileText },
+  { href: "/billing", label: "請求・入金", icon: ReceiptJapaneseYen },
+  { href: "/tasks", label: "タスク", icon: ListTodo },
+  { href: "/reminders", label: "期限管理", icon: BellRing },
+  { href: "/purchase-analysis", label: "購入検討", icon: Calculator },
+  { href: "/reports/annual", label: "年間一覧", icon: ChartNoAxesCombined },
+  { href: "/settings", label: "設定", icon: Settings },
+];
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const path = usePathname();
+  const [open, setOpen] = useState(false);
+  const { mode, syncState, saveError, clearSaveError } = useApp();
+  return (
+    <div className="app-frame">
+      <aside className={`sidebar ${open ? "open" : ""}`}>
+        <div className="brand">
+          <div className="brand-mark">RM</div>
+          <div>
+            <b>賃貸管理</b>
+            <small>個人用ポートフォリオ</small>
+          </div>
+          <button className="mobile-close" onClick={() => setOpen(false)}>
+            <X />
+          </button>
+        </div>
+        <nav>
+          {links.map(({ href, label, icon: Icon }) => (
+            <Link
+              key={href}
+              href={href}
+              onClick={() => setOpen(false)}
+              className={path === href ? "active" : ""}
+            >
+              <Icon size={19} />
+              <span>{label}</span>
+            </Link>
+          ))}
+        </nav>
+        <div className="sidebar-footer">
+          <div className="mode-note">
+            <span className={`status-dot ${syncState}`} />
+            {mode === "supabase"
+              ? syncState === "saving"
+                ? "保存中..."
+                : syncState === "error"
+                  ? "保存エラー"
+                  : "同期済み"
+              : "デモモード"}
+          </div>
+          {mode === "supabase" && (
+            <button
+              className="logout-button"
+              onClick={async () => {
+                await createClient()?.auth.signOut();
+                location.href = "/login";
+              }}
+            >
+              <LogOut />
+              ログアウト
+            </button>
+          )}
+        </div>
+      </aside>
+      <header className="mobile-header">
+        <button onClick={() => setOpen(true)}>
+          <Menu />
+        </button>
+        <b>賃貸管理</b>
+      </header>
+      {open && (
+        <button
+          className="scrim"
+          onClick={() => setOpen(false)}
+          aria-label="閉じる"
+        />
+      )}
+      <main className="main">
+        {saveError && (
+          <div className="save-error" role="alert">
+            <span>保存できませんでした: {saveError}</span>
+            <button onClick={clearSaveError} aria-label="閉じる">
+              <X />
+            </button>
+          </div>
+        )}
+        {children}
+      </main>
+      <nav className="bottom-nav">
+        {links.slice(0, 5).map(({ href, label, icon: Icon }) => (
+          <Link
+            key={href}
+            href={href}
+            className={path === href ? "active" : ""}
+          >
+            <Icon />
+            <span>{label}</span>
+          </Link>
+        ))}
+      </nav>
+    </div>
+  );
+}

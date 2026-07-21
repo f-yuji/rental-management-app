@@ -1,9 +1,13 @@
 "use client";
 import { useState } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { Eye, Pencil, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useApp } from "@/components/app-provider";
 import { Badge, CsvButton, Modal, PageHeader } from "@/components/ui/shared";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { yen } from "@/lib/format";
+import { percent } from "@/lib/format";
+import { unitOccupancyMetrics } from "@/lib/unit-occupancy";
 import type { Unit, UnitStatus } from "@/types";
 const blank = {
   unit_code: "",
@@ -20,11 +24,20 @@ const blank = {
 };
 type Form = typeof blank;
 export function UnitsPage() {
-  const { data, setData } = useApp();
+  const { data, actions } = useApp();
   const [filter, setFilter] = useState("");
   const [editing, setEditing] = useState<Unit | null | "new">(null);
+  const [newCode, setNewCode] = useState("");
   const list = data.units.filter((u) => !filter || u.status === filter);
-  const save = (f: Form) => {
+  const save = async (f: Form) => {
+    f = { ...f, unit_code: f.unit_code.trim().toUpperCase() };
+    if (!f.unit_code) {
+      const propertyCode = data.properties.find(
+        (p) => p.id === f.property_id,
+      )?.property_code;
+      if (propertyCode)
+        f.unit_code = await actions.nextCode("unit", propertyCode);
+    }
     if (!f.unit_code || !f.name || !f.property_id)
       return alert("区画コード、区画名、物件は必須です");
     if (
@@ -40,26 +53,19 @@ export function UnitsPage() {
         vehicle_capacity:
           f.vehicle_capacity === "" ? null : Number(f.vehicle_capacity),
       };
-    setData((d) => ({
-      ...d,
-      units:
-        editing === "new"
-          ? [
-              ...d.units,
-              {
-                ...value,
-                id: crypto.randomUUID(),
-                user_id: "demo-user",
-                created_at: stamp,
-                updated_at: stamp,
-              },
-            ]
-          : d.units.map((u) =>
-              u.id === (editing as Unit).id
-                ? { ...u, ...value, updated_at: stamp }
-                : u,
-            ),
-    }));
+    if (editing === "new")
+      await actions.createUnit({
+        ...value,
+        id: crypto.randomUUID(),
+        user_id: "demo-user",
+        created_at: stamp,
+        updated_at: stamp,
+      });
+    else
+      await actions.updateUnit((editing as Unit).id, {
+        ...value,
+        updated_at: stamp,
+      });
     setEditing(null);
   };
   return (
@@ -67,7 +73,14 @@ export function UnitsPage() {
       <PageHeader
         title="区画"
         description="土地・置場を区画単位で管理"
-        action={() => setEditing("new")}
+        action={() => {
+          const property = data.properties[0];
+          if (!property) return alert("先に物件を登録してください");
+          void actions.nextCode("unit", property.property_code).then((code) => {
+            setNewCode(code);
+            setEditing("new");
+          });
+        }}
       />
       <div className="toolbar">
         <select value={filter} onChange={(e) => setFilter(e.target.value)}>
@@ -113,6 +126,10 @@ export function UnitsPage() {
               <th className="num">標準賃料</th>
               <th>現況</th>
               <th>現在契約者</th>
+              <th>契約継続期間</th>
+              <th>現在空室期間</th>
+              <th className="num">累計空室日数</th>
+              <th className="num">稼働率</th>
               <th />
             </tr>
           </thead>
@@ -122,6 +139,12 @@ export function UnitsPage() {
                 (c) =>
                   c.unit_id === u.id &&
                   ["契約中", "終了予定"].includes(c.status),
+              );
+              const occupancy = unitOccupancyMetrics(
+                data.contracts.filter((contract) => contract.unit_id === u.id),
+                data.properties.find(
+                  (property) => property.id === u.property_id,
+                )?.acquisition_date ?? null,
               );
               return (
                 <tr key={u.id}>
@@ -142,7 +165,9 @@ export function UnitsPage() {
                     {u.has_power ? "電源有" : "電源無"} /{" "}
                     {u.heavy_machinery_allowed ? "重機可" : "重機不可"}
                   </td>
-                  <td className="num">{yen(u.standard_rent)}</td>
+                  <td className="num" data-label="標準賃料">
+                    {yen(u.standard_rent)}
+                  </td>
                   <td>
                     <Badge>{u.status}</Badge>
                   </td>
@@ -150,7 +175,20 @@ export function UnitsPage() {
                     {c?.tenant_name || "-"}
                     {c && <small>{yen(c.monthly_rent)}</small>}
                   </td>
+                  <td>{occupancy.contractDuration}</td>
+                  <td>
+                    <Badge>{occupancy.vacancyDuration}</Badge>
+                  </td>
+                  <td className="num" data-label="累計空室日数">
+                    {occupancy.cumulativeVacancyDays}日
+                  </td>
+                  <td className="num" data-label="稼働率">
+                    {percent(occupancy.occupancyRate)}
+                  </td>
                   <td className="row-actions">
+                    <Link href={`/units/${u.id}`} title="詳細">
+                      <Eye />
+                    </Link>
                     <button onClick={() => setEditing(u)}>
                       <Pencil />
                     </button>
@@ -171,16 +209,7 @@ export function UnitsPage() {
                             `${u.name}を削除しますか？${related}\nこの操作は元に戻せません。`,
                           )
                         )
-                          setData((d) => ({
-                            ...d,
-                            units: d.units.filter((x) => x.id !== u.id),
-                            contracts: d.contracts.filter(
-                              (x) => x.unit_id !== u.id,
-                            ),
-                            charges: d.charges.filter(
-                              (x) => x.unit_id !== u.id,
-                            ),
-                          }));
+                          void actions.deleteUnit(u.id);
                       }}
                       title="関連データごと削除"
                     >
@@ -195,10 +224,15 @@ export function UnitsPage() {
       </div>
       {editing && (
         <UnitForm
+          isNew={editing === "new"}
           properties={data.properties}
           initial={
             editing === "new"
-              ? { ...blank, property_id: data.properties[0]?.id || "" }
+              ? {
+                  ...blank,
+                  unit_code: newCode,
+                  property_id: data.properties[0]?.id || "",
+                }
               : {
                   ...editing,
                   area_sqm:
@@ -217,11 +251,13 @@ export function UnitsPage() {
   );
 }
 function UnitForm({
+  isNew,
   properties,
   initial,
   onClose,
   onSave,
 }: {
+  isNew: boolean;
   properties: { id: string; name: string }[];
   initial: Form;
   onClose: () => void;
@@ -229,7 +265,7 @@ function UnitForm({
 }) {
   const [f, setF] = useState(initial);
   return (
-    <Modal title={f.unit_code ? "区画を編集" : "区画を登録"} onClose={onClose}>
+    <Modal title={isNew ? "区画を登録" : "区画を編集"} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -273,31 +309,32 @@ function UnitForm({
           </label>
           <label>
             面積㎡
-            <input
-              type="number"
-              min="0"
-              value={f.area_sqm}
-              onChange={(e) => setF({ ...f, area_sqm: e.target.value })}
+            <NumericInput
+              value={Number(f.area_sqm)}
+              decimalScale={2}
+              onChange={(value) =>
+                setF({ ...f, area_sqm: value ? String(value) : "" })
+              }
             />
           </label>
           <label>
             車両台数
-            <input
-              type="number"
-              min="0"
-              value={f.vehicle_capacity}
-              onChange={(e) => setF({ ...f, vehicle_capacity: e.target.value })}
+            <NumericInput
+              value={Number(f.vehicle_capacity)}
+              decimalScale={0}
+              onChange={(value) =>
+                setF({ ...f, vehicle_capacity: value ? String(value) : "" })
+              }
             />
           </label>
           <label>
             標準賃料
-            <input
-              type="number"
-              min="0"
+            <NumericInput
               value={f.standard_rent}
-              onChange={(e) =>
-                setF({ ...f, standard_rent: Number(e.target.value) })
-              }
+              format="currency"
+              decimalScale={0}
+              suffix="円"
+              onChange={(value) => setF({ ...f, standard_rent: value })}
             />
           </label>
           <label>

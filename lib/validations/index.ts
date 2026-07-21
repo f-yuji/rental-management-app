@@ -1,4 +1,32 @@
 import { z } from "zod";
-const nonNegativeInt=(label:string)=>z.coerce.number().int(`${label}は整数で入力してください`).min(0,`${label}は0以上で入力してください`);
-export const propertySchema=z.object({property_code:z.string().trim().min(1,"物件コードは必須です"),name:z.string().trim().min(1,"物件名は必須です"),acquisition_price:nonNegativeInt("取得価格"),acquisition_costs:nonNegativeInt("取得諸費用"),development_costs:nonNegativeInt("開発費"),current_valuation:nonNegativeInt("現在評価額"),remaining_debt:nonNegativeInt("残債"),annual_property_tax:nonNegativeInt("固定資産税年額")});
-export const contractSchema=z.object({contract_code:z.string().trim().min(1,"契約コードは必須です"),property_id:z.string().min(1,"物件を選択してください"),unit_id:z.string().min(1,"区画を選択してください"),tenant_name:z.string().trim().min(1,"契約者は必須です"),start_date:z.iso.date("開始日は必須です"),end_date:z.union([z.iso.date(),z.literal("")]),monthly_rent:nonNegativeInt("月額賃料"),billing_day:z.coerce.number().int().min(1).max(31),payment_due_day:z.coerce.number().int().min(1).max(31)}).refine(v=>!v.end_date||v.end_date>=v.start_date,{message:"終了日は開始日以降にしてください",path:["end_date"]});
+const nonNegativeInt = (label: string) =>
+  z.coerce
+    .number()
+    .int(`${label}は整数で入力してください`)
+    .min(0, `${label}は0以上で入力してください`);
+export const propertySchema = z.object({
+  property_code: z.string().trim().min(1, "物件コードは必須です"),
+  name: z.string().trim().min(1, "物件名は必須です"),
+  acquisition_price: nonNegativeInt("取得価格"),
+  acquisition_costs: nonNegativeInt("取得諸費用"),
+  development_costs: nonNegativeInt("開発費"),
+  current_valuation: nonNegativeInt("現在評価額"),
+  remaining_debt: nonNegativeInt("残債"),
+  annual_property_tax: nonNegativeInt("固定資産税年額"),
+});
+export const contractSchema = z
+  .object({
+    contract_code: z.string().trim().min(1, "契約コードは必須です"),
+    property_id: z.string().min(1, "物件を選択してください"),
+    unit_id: z.string().min(1, "区画を選択してください"),
+    tenant_name: z.string().trim().min(1, "契約者は必須です"),
+    start_date: z.iso.date("開始日は必須です"),
+    end_date: z.union([z.iso.date(), z.literal("")]),
+    monthly_rent: nonNegativeInt("月額賃料"),
+    billing_day: z.coerce.number().int().min(1).max(31),
+    payment_due_day: z.coerce.number().int().min(1).max(31),
+  })
+  .refine((v) => !v.end_date || v.end_date >= v.start_date, {
+    message: "終了日は開始日以降にしてください",
+    path: ["end_date"],
+  });

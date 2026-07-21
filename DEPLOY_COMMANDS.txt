@@ -1,0 +1,47 @@
+賃貸管理アプリ 更新・デプロイ手順（PowerShell）
+================================================
+
+1. Supabase SQL Editorで未実行のmigrationを番号順に実行
+
+supabase/migrations/003_improve_settings_and_codes.sql
+supabase/migrations/004_remove_actual_monthly_rent.sql
+supabase/migrations/005_operations_tasks_documents.sql
+
+※ SQLファイルの内容をSupabase Dashboard > SQL Editorへ貼り付けて実行します。
+※ 005は契約拡張、tasks、reminders、attachments、契約書類Storage bucketとRLSを追加します。
+
+2. プロジェクトへ移動
+
+Set-Location "C:\Users\f-yuj\dev\rental-management-app"
+
+3. ローカル検証
+
+npm install
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+
+4. GitHubへpush
+
+git status
+git add README.md DEPLOY_COMMANDS.txt app components lib types supabase/migrations
+git commit -m "Expand rental operations and reminders"
+git push origin main
+
+5. Fly.ioへデプロイ
+
+fly deploy
+
+6. デプロイ確認
+
+fly status
+fly logs --app rental-management-app
+Invoke-WebRequest -UseBasicParsing "https://rental-management-app.fly.dev/login" | Select-Object StatusCode
+
+公開URL
+https://rental-management-app.fly.dev/
+
+注意
+・Supabaseのanon keyやservice role keyをこのファイルやGitへ記載しないでください。
+・画面で新しいDB項目を使用する前に、必ずmigration 003～005を実行してください。

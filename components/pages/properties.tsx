@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Pencil, Search, Trash2 } from "lucide-react";
 import { useApp } from "@/components/app-provider";
 import { CsvButton, Modal, PageHeader } from "@/components/ui/shared";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { grossYield, netAssets, totalInvestment } from "@/lib/calculations";
 import { percent, yen } from "@/lib/format";
 import type { Property } from "@/types";
@@ -22,13 +23,17 @@ const blank = {
 };
 type Form = typeof blank;
 export function PropertiesPage() {
-  const { data, setData } = useApp();
+  const { data, actions } = useApp();
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Property | null | "new">(null);
+  const [newCode, setNewCode] = useState("");
   const list = data.properties.filter((p) =>
     (p.name + p.address + p.property_code).includes(query),
   );
-  const save = (form: Form) => {
+  const save = async (form: Form) => {
+    form = { ...form, property_code: form.property_code.trim().toUpperCase() };
+    if (!form.property_code)
+      form.property_code = await actions.nextCode("property");
     if (!form.property_code.trim() || !form.name.trim())
       return alert("物件コードと物件名は必須です");
     if (
@@ -40,32 +45,21 @@ export function PropertiesPage() {
     )
       return alert("この物件コードは使用済みです");
     const stamp = new Date().toISOString();
-    setData((d) => ({
-      ...d,
-      properties:
-        editing === "new"
-          ? [
-              ...d.properties,
-              {
-                ...form,
-                acquisition_date: form.acquisition_date || null,
-                id: crypto.randomUUID(),
-                user_id: "demo-user",
-                created_at: stamp,
-                updated_at: stamp,
-              },
-            ]
-          : d.properties.map((p) =>
-              p.id === (editing as Property).id
-                ? {
-                    ...p,
-                    ...form,
-                    acquisition_date: form.acquisition_date || null,
-                    updated_at: stamp,
-                  }
-                : p,
-            ),
-    }));
+    if (editing === "new")
+      await actions.createProperty({
+        ...form,
+        acquisition_date: form.acquisition_date || null,
+        id: crypto.randomUUID(),
+        user_id: "demo-user",
+        created_at: stamp,
+        updated_at: stamp,
+      });
+    else
+      await actions.updateProperty((editing as Property).id, {
+        ...form,
+        acquisition_date: form.acquisition_date || null,
+        updated_at: stamp,
+      });
     setEditing(null);
   };
   const remove = (p: Property) => {
@@ -79,20 +73,19 @@ export function PropertiesPage() {
     if (
       confirm(`${p.name}を削除しますか？${details}\nこの操作は元に戻せません。`)
     )
-      setData((d) => ({
-        ...d,
-        properties: d.properties.filter((x) => x.id !== p.id),
-        units: d.units.filter((x) => x.property_id !== p.id),
-        contracts: d.contracts.filter((x) => x.property_id !== p.id),
-        charges: d.charges.filter((x) => x.property_id !== p.id),
-      }));
+      void actions.deleteProperty(p.id);
   };
   return (
     <>
       <PageHeader
         title="物件"
         description={`${data.properties.length}件の資産を管理`}
-        action={() => setEditing("new")}
+        action={() => {
+          void actions.nextCode("property").then((code) => {
+            setNewCode(code);
+            setEditing("new");
+          });
+        }}
       />
       <div className="toolbar">
         <label className="search">
@@ -127,6 +120,10 @@ export function PropertiesPage() {
               <th className="num">現在月収</th>
               <th className="num">満室月収</th>
               <th className="num">総投資額</th>
+              <th className="num">年間賃料</th>
+              <th className="num">取得価格</th>
+              <th className="num">現在評価額</th>
+              <th className="num">年間固定資産税</th>
               <th className="num">純資産</th>
               <th className="num">表面利回り</th>
               <th />
@@ -153,13 +150,40 @@ export function PropertiesPage() {
                   </td>
                   <td>
                     {p.property_type}
-                    <small>{p.address}</small>
+                    <small
+                      className="address-truncate"
+                      title={p.address}
+                      tabIndex={0}
+                      onClick={() => alert(p.address)}
+                    >
+                      {p.address}
+                    </small>
                   </td>
-                  <td className="num">{yen(current)}</td>
-                  <td className="num">{yen(full)}</td>
-                  <td className="num">{yen(totalInvestment(p))}</td>
-                  <td className="num">{yen(netAssets(p))}</td>
-                  <td className="num">
+                  <td className="num" data-label="現在月収">
+                    {yen(current)}
+                  </td>
+                  <td className="num" data-label="満室月収">
+                    {yen(full)}
+                  </td>
+                  <td className="num" data-label="総投資額">
+                    {yen(totalInvestment(p))}
+                  </td>
+                  <td className="num" data-label="年間賃料">
+                    {yen(current * 12)}
+                  </td>
+                  <td className="num" data-label="取得価格">
+                    {yen(p.acquisition_price)}
+                  </td>
+                  <td className="num" data-label="現在評価額">
+                    {yen(p.current_valuation)}
+                  </td>
+                  <td className="num" data-label="年間固定資産税">
+                    {yen(p.annual_property_tax)}
+                  </td>
+                  <td className="num" data-label="純資産">
+                    {yen(netAssets(p))}
+                  </td>
+                  <td className="num" data-label="表面利回り">
                     {percent(grossYield(full, totalInvestment(p)))}
                   </td>
                   <td className="row-actions">
@@ -178,9 +202,10 @@ export function PropertiesPage() {
       </div>
       {editing && (
         <PropertyForm
+          isNew={editing === "new"}
           initial={
             editing === "new"
-              ? blank
+              ? { ...blank, property_code: newCode }
               : { ...editing, acquisition_date: editing.acquisition_date || "" }
           }
           onSave={save}
@@ -191,10 +216,12 @@ export function PropertiesPage() {
   );
 }
 function PropertyForm({
+  isNew,
   initial,
   onSave,
   onClose,
 }: {
+  isNew: boolean;
   initial: Form;
   onSave: (x: Form) => void;
   onClose: () => void;
@@ -203,26 +230,33 @@ function PropertyForm({
   const text = (key: keyof Form, label: string, type = "text") => (
     <label>
       {label}
-      <input
-        type={type}
-        value={String(f[key])}
-        onChange={(e) =>
-          setF({
-            ...f,
-            [key]:
-              type === "number"
-                ? Math.max(0, Number(e.target.value))
-                : e.target.value,
-          })
-        }
-      />
+      {type === "number" ? (
+        <NumericInput
+          value={Number(f[key])}
+          format="currency"
+          decimalScale={0}
+          suffix="円"
+          onChange={(value) => setF({ ...f, [key]: value })}
+        />
+      ) : (
+        <input
+          type={type}
+          value={String(f[key])}
+          onChange={(e) =>
+            setF({
+              ...f,
+              [key]:
+                type === "number"
+                  ? Math.max(0, Number(e.target.value))
+                  : e.target.value,
+            })
+          }
+        />
+      )}
     </label>
   );
   return (
-    <Modal
-      title={initial.property_code ? "物件を編集" : "物件を登録"}
-      onClose={onClose}
-    >
+    <Modal title={isNew ? "物件を登録" : "物件を編集"} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
