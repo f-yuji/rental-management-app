@@ -272,7 +272,6 @@ export function ContractsPage() {
                   <td className="row-actions">
                     <Link href={`/contracts/${c.id}`} title="詳細">
                       <Eye />
-                      <span>詳細</span>
                     </Link>
                     <button onClick={() => setEditing(c)} title="編集">
                       <Pencil />
