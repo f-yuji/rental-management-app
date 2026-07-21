@@ -34,7 +34,7 @@ const blank = {
   renewal_method: "",
   auto_renew: false,
   requires_recontract: false,
-  renewal_cycle_months: 12 as number | null,
+  renewal_cycle_months: 24 as number | null,
   renewal_fee: 0,
   guarantor_enabled: false,
   guarantor_company_name: "",
@@ -505,7 +505,17 @@ function ContractForm({
             <input
               type="date"
               value={f.end_date}
-              onChange={(e) => setF({ ...f, end_date: e.target.value })}
+              onChange={(e) => {
+                const end_date = e.target.value;
+                setF({
+                  ...f,
+                  end_date,
+                  renewal_date:
+                    !f.renewal_date || f.renewal_date === f.end_date
+                      ? end_date
+                      : f.renewal_date,
+                });
+              }}
             />
           </label>
           <label>
