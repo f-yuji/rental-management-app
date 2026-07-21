@@ -195,6 +195,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         router.replace("/");
         return;
       }
+      const today = new Date().toLocaleDateString("sv-SE", {
+        timeZone: "Asia/Tokyo",
+      });
+      const automaticBilling = await supabase.rpc(
+        "process_automatic_billing",
+        { target_date: today },
+      );
+      if (automaticBilling.error && automaticBilling.error.code !== "PGRST202")
+        console.warn("Automatic billing failed:", automaticBilling.error.message);
       const results = await Promise.all([
         supabase.from("properties").select("*").order("property_code"),
         supabase.from("units").select("*").order("unit_code"),

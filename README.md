@@ -49,11 +49,14 @@ npm run build
    - `supabase/migrations/003_improve_settings_and_codes.sql`
    - `supabase/migrations/004_remove_actual_monthly_rent.sql`
    - `supabase/migrations/005_operations_tasks_documents.sql`
+   - `supabase/migrations/006_automatic_billing.sql`
 3. Authentication > Users > Add userからログインユーザーを作成します。
 4. `.env.local`へProject URL、anon key、service role keyを設定します。
 5. 必要なら`supabase/seed.sql`先頭のUUIDを作成したユーザーIDへ置換して実行します。
 
 既存環境では未実行のmigrationを番号順に追加実行してください。`005`は契約の保証会社・口座・更新・解約項目、tasks、reminders、attachments、非公開の契約書類Storage bucketとRLSを追加します。主要コードは`user_id`単位の一意制約で保護されます。
+
+`006`を適用すると、ログイン時に当月の請求と入金を自動確認します。契約の「毎月の請求日」に請求を重複なく生成し、「毎月の入金予定日」に全額入金済みへ更新します。31日がない月は月末として扱います。請求・入金画面で手動修正した明細には`[手動管理]`が付き、その月は自動入金で上書きされません。
 
 ## 保存仕様
 

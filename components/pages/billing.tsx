@@ -88,6 +88,9 @@ export function BillingPage() {
         timeZone: "Asia/Tokyo",
       }),
       payment_status: paymentStatus(charge.billed_amount, charge.billed_amount),
+      memo: charge.memo.includes("[手動管理]")
+        ? charge.memo
+        : `${charge.memo}${charge.memo ? " / " : ""}[手動管理]`,
     });
   return (
     <>
@@ -232,7 +235,9 @@ export function BillingPage() {
               paid_amount: paidAmount,
               payment_date: paidAmount ? date : null,
               payment_status: paymentStatus(editing.billed_amount, paidAmount),
-              memo,
+              memo: memo.includes("[手動管理]")
+                ? memo
+                : `${memo}${memo ? " / " : ""}[手動管理]`,
             });
             setEditing(null);
           }}

@@ -427,6 +427,19 @@ function ContractForm({
             />
           </label>
           <label>
+            毎月の請求日（自動生成）
+            <NumericInput
+              value={f.billing_day}
+              decimalScale={0}
+              onChange={(value) =>
+                setF({
+                  ...f,
+                  billing_day: Math.min(31, Math.max(1, value)),
+                })
+              }
+            />
+          </label>
+          <label>
             更新日
             <input
               type="date"
@@ -698,7 +711,7 @@ function ContractForm({
             </select>
           </label>
           <label>
-            入金期限日
+            毎月の入金予定日（自動入金）
             <NumericInput
               value={f.payment_due_day}
               decimalScale={0}
