@@ -17,10 +17,12 @@ const categories: AttachmentCategory[] = [
 ];
 export function ContractDetailPage() {
   const { id } = useParams<{ id: string }>(),
-    { data, actions, mode } = useApp();
+    { data, actions, mode, ready } = useApp();
   const contract = data.contracts.find((row) => row.id === id);
   const [category, setCategory] = useState<AttachmentCategory>("契約書"),
     [uploading, setUploading] = useState(false);
+  if (!ready)
+    return <section className="panel"><p>契約情報を読み込んでいます...</p></section>;
   if (!contract)
     return (
       <section className="panel">

@@ -798,6 +798,14 @@ textarea {
   place-items: center;
   color: #65726b;
 }
+.row-actions a:has(span) {
+  width: auto;
+  padding: 0 9px;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+}
 .row-actions a:hover {
   background: #eef2ef;
   border-radius: 5px;
