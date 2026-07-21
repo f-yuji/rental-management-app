@@ -31,7 +31,9 @@ git push origin main
 
 5. Fly.ioへデプロイ
 
-fly deploy
+$supabaseUrl = ((Get-Content .env.local | Where-Object { $_ -match '^NEXT_PUBLIC_SUPABASE_URL=' }) -split '=', 2)[1].Trim()
+$supabaseAnonKey = ((Get-Content .env.local | Where-Object { $_ -match '^NEXT_PUBLIC_SUPABASE_ANON_KEY=' }) -split '=', 2)[1].Trim()
+fly deploy --build-arg "NEXT_PUBLIC_SUPABASE_URL=$supabaseUrl" --build-arg "NEXT_PUBLIC_SUPABASE_ANON_KEY=$supabaseAnonKey"
 
 6. デプロイ確認
 
