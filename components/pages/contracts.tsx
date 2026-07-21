@@ -7,6 +7,10 @@ import { Badge, CsvButton, Modal, PageHeader, RecordSaveStatus } from "@/compone
 import { NumericInput } from "@/components/ui/numeric-input";
 import { effectiveContractStatus, outstanding } from "@/lib/calculations";
 import { dateLabel, yen } from "@/lib/format";
+import {
+  previewRetroactiveCharges,
+  type RetroPaymentMode,
+} from "@/lib/retroactive-billing";
 import type { Contract, ContractStatus, ContractType } from "@/types";
 const blank = {
   contract_code: "",
@@ -57,6 +61,7 @@ export function ContractsPage() {
   const { data, actions, currentUserId } = useApp();
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Contract | null | "new">(null);
+  const [pendingBackfill, setPendingBackfill] = useState<Contract | null>(null);
   const [newCode, setNewCode] = useState("");
   const list = data.contracts.filter(
     (c) => c.tenant_name.includes(query) || c.contract_code.includes(query),
@@ -113,15 +118,21 @@ export function ContractsPage() {
         cancellation_planned_date: f.cancellation_planned_date || null,
         cancellation_completed_date: f.cancellation_completed_date || null,
       };
-    if (editing === "new")
-      await actions.createContract({
+    if (editing === "new") {
+      const created = {
         ...value,
         id: crypto.randomUUID(),
         user_id: currentUserId,
         created_at: stamp,
         updated_at: stamp,
-      });
-    else
+      } as Contract;
+      await actions.createContract(created);
+      const currentMonth = new Date()
+        .toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" })
+        .slice(0, 7);
+      if (created.start_date.slice(0, 7) < currentMonth)
+        setPendingBackfill(created);
+    } else
       await actions.updateContract((editing as Contract).id, {
         ...value,
         updated_at: stamp,
@@ -324,7 +335,84 @@ export function ContractsPage() {
           onSave={save}
         />
       )}
+      {pendingBackfill && (
+        <ContractBackfillModal
+          contract={pendingBackfill}
+          charges={data.charges}
+          settings={data.settings}
+          onClose={() => setPendingBackfill(null)}
+          onCreate={async (rows) => {
+            await actions.createMonthlyCharges(rows);
+            setPendingBackfill(null);
+            alert(`${rows.length}件の過去請求を一括処理しました`);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+function ContractBackfillModal({
+  contract,
+  charges,
+  settings,
+  onClose,
+  onCreate,
+}: {
+  contract: Contract;
+  charges: ReturnType<typeof useApp>["data"]["charges"];
+  settings: ReturnType<typeof useApp>["data"]["settings"];
+  onClose: () => void;
+  onCreate: (rows: ReturnType<typeof previewRetroactiveCharges>["rows"]) => Promise<void>;
+}) {
+  const currentMonth = new Date()
+    .toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" })
+    .slice(0, 7);
+  const [paymentMode, setPaymentMode] = useState<RetroPaymentMode>("paid");
+  const preview = previewRetroactiveCharges(
+    [contract],
+    charges,
+    settings,
+    currentMonth,
+    paymentMode,
+  );
+  return (
+    <Modal title="過去分を一括処理" onClose={onClose}>
+      <p>
+        {contract.tenant_name}の契約開始月から今月まで、請求履歴を生成しますか？
+      </p>
+      <div className="form-grid">
+        <label>
+          入金状態
+          <select
+            value={paymentMode}
+            onChange={(e) => setPaymentMode(e.target.value as RetroPaymentMode)}
+          >
+            <option value="paid">全件入金済み</option>
+            <option value="unpaid">全件未入金</option>
+          </select>
+        </label>
+      </div>
+      <div className="retro-preview">
+        <dl>
+          <dt>対象期間</dt><dd>{preview.period}</dd>
+          <dt>生成件数</dt><dd>{preview.rows.length}件</dd>
+          <dt>請求総額</dt><dd>{yen(preview.totalAmount)}</dd>
+          <dt>重複スキップ</dt><dd>{preview.duplicateCount}件</dd>
+        </dl>
+      </div>
+      <div className="form-actions">
+        <button type="button" className="secondary" onClick={onClose}>今はしない</button>
+        <button
+          type="button"
+          className="primary"
+          disabled={!preview.rows.length}
+          onClick={() => void onCreate(preview.rows)}
+        >
+          一括処理する
+        </button>
+      </div>
+    </Modal>
   );
 }
 function ContractForm({
