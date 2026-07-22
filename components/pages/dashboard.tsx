@@ -260,7 +260,7 @@ export function Dashboard() {
                   formatter={(value) => [yen(Number(value)), "累計入金額"]}
                   contentStyle={{ borderRadius: 6, borderColor: "#d9e1dc" }}
                 />
-                <Line type="monotone" dataKey="cumulativePaid" name="累計入金額" stroke="#087a58" strokeWidth={3} dot={{ r: 3, fill: "#087a58" }} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="cumulativePaid" name="累計入金額" stroke="#087a58" strokeWidth={3} dot={{ r: 3, fill: "#087a58", className: "payment-dot" }} activeDot={{ r: 5 }} />
                 {acquisitionEvents.map((event) => (
                   <ReferenceDot
                     key={event.month}

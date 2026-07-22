@@ -477,6 +477,9 @@ textarea {
   .cumulative-chart {
     height: 260px;
   }
+  .cumulative-chart .payment-dot {
+    display: none;
+  }
 }
 .proration-preview span { color: var(--muted); }
 .row-actions button,
