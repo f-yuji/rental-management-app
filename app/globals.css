@@ -420,6 +420,13 @@ textarea {
   border-radius: 5px;
   font-variant-numeric: tabular-nums;
 }
+.recalculation-table {
+  max-height: 48vh;
+  margin-top: 14px;
+}
+.recalculation-table table {
+  min-width: 760px;
+}
 .proration-preview span { color: var(--muted); }
 .row-actions button,
 .modal header button,

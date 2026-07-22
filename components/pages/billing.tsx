@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Check, Edit3, Trash2 } from "lucide-react";
+import { Calculator, Check, Edit3, Trash2 } from "lucide-react";
 import { useApp } from "@/components/app-provider";
 import {
   Badge,
@@ -19,11 +19,16 @@ import {
 import { monthLabel, yen } from "@/lib/format";
 import { NumericInput } from "@/components/ui/numeric-input";
 import type { MonthlyCharge } from "@/types";
+import {
+  previewStartMonthRecalculations,
+  type StartMonthRecalculation,
+} from "@/lib/start-month-recalculation";
 export function BillingPage() {
   const { data, actions, currentUserId } = useApp();
   const [month, setMonth] = useState("2026-04");
   const [filter, setFilter] = useState("");
   const [editing, setEditing] = useState<MonthlyCharge | null>(null);
+  const [showRecalculation, setShowRecalculation] = useState(false);
   const list = useMemo(
     () =>
       data.charges.filter(
@@ -107,6 +112,10 @@ export function BillingPage() {
         </label>
         <button className="primary" onClick={generate}>
           請求を生成
+        </button>
+        <button className="secondary" onClick={() => setShowRecalculation(true)}>
+          <Calculator />
+          開始月を再計算
         </button>
         <select value={filter} onChange={(e) => setFilter(e.target.value)}>
           <option value="">すべての入金状態</option>
@@ -245,7 +254,86 @@ export function BillingPage() {
           }}
         />
       )}
+      {showRecalculation && (
+        <StartMonthRecalculationModal
+          rows={previewStartMonthRecalculations(data.contracts, data.charges)}
+          propertyName={(id) => data.properties.find((p) => p.id === id)?.name || "-"}
+          onClose={() => setShowRecalculation(false)}
+          onApply={async (rows) => {
+            const results = await Promise.allSettled(
+              rows.map((row) =>
+                actions.updateMonthlyCharge(row.charge.id, {
+                  billed_amount: row.recalculatedAmount,
+                  payment_status: row.paymentStatus,
+                  memo: row.charge.memo.includes("[開始月日割り再計算]")
+                    ? row.charge.memo
+                    : `${row.charge.memo}${row.charge.memo ? " / " : ""}[開始月日割り再計算]`,
+                  updated_at: new Date().toISOString(),
+                }),
+              ),
+            );
+            const failed = results.filter((result) => result.status === "rejected").length;
+            alert(`${rows.length - failed}件を更新しました${failed ? `\n${failed}件は保存に失敗しました` : ""}`);
+            if (!failed) setShowRecalculation(false);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+function StartMonthRecalculationModal({
+  rows,
+  propertyName,
+  onClose,
+  onApply,
+}: {
+  rows: StartMonthRecalculation[];
+  propertyName: (id: string) => string;
+  onClose: () => void;
+  onApply: (rows: StartMonthRecalculation[]) => Promise<void>;
+}) {
+  const [selected, setSelected] = useState(() => new Set(rows.map((row) => row.charge.id)));
+  const [saving, setSaving] = useState(false);
+  const selectedRows = rows.filter((row) => selected.has(row.charge.id));
+  const toggle = (id: string) => setSelected((current) => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
+  return (
+    <Modal title="既存請求の開始月日割り再計算" onClose={onClose}>
+      <p className="info-box">
+        契約開始月の既存請求だけを再計算します。入金額・入金日・メモは保持されます。請求額より入金額が多くなる場合も、入金実績は変更しません。
+      </p>
+      {rows.length === 0 ? (
+        <p className="empty">再計算が必要な請求はありません。</p>
+      ) : (
+        <div className="table-wrap recalculation-table">
+          <table>
+            <thead><tr><th><input type="checkbox" aria-label="すべて選択" checked={selected.size === rows.length} onChange={(e) => setSelected(e.target.checked ? new Set(rows.map((row) => row.charge.id)) : new Set())} /></th><th>契約・物件</th><th>開始月</th><th className="num">変更前</th><th className="num">変更後</th><th className="num">差額</th><th className="num">入金額</th></tr></thead>
+            <tbody>{rows.map((row) => (
+              <tr key={row.charge.id}>
+                <td><input type="checkbox" aria-label={`${row.contract.contract_code}を選択`} checked={selected.has(row.charge.id)} onChange={() => toggle(row.charge.id)} /></td>
+                <td>{row.contract.tenant_name}<small>{row.contract.contract_code} / {propertyName(row.charge.property_id)}</small></td>
+                <td>{monthLabel(row.charge.billing_month)}</td>
+                <td className="num">{yen(row.previousAmount)}</td>
+                <td className="num">{yen(row.recalculatedAmount)}</td>
+                <td className={`num ${row.difference < 0 ? "danger-text" : ""}`}>{row.difference > 0 ? "+" : ""}{yen(row.difference)}</td>
+                <td className="num">{yen(row.charge.paid_amount)}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+      <div className="form-actions">
+        <button type="button" className="secondary" onClick={onClose}>キャンセル</button>
+        <button type="button" className="primary" disabled={!selectedRows.length || saving} onClick={() => { setSaving(true); void onApply(selectedRows).finally(() => setSaving(false)); }}>
+          {saving ? "更新中..." : `${selectedRows.length}件を更新`}
+        </button>
+      </div>
+    </Modal>
   );
 }
 function PaymentForm({
