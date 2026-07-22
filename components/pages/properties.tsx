@@ -134,7 +134,7 @@ export function PropertiesPage() {
               <th className="num">固定資産評価額</th>
               <th className="num">年間固定資産税</th>
               <th className="num">想定売却価格</th>
-              <th className="num">累計入金額</th>
+              <th className="num">累計入金額（請求ログ）</th>
               <th className="num">回収率</th>
               <th className="num">表面利回り</th>
               <th />
@@ -199,7 +199,7 @@ export function PropertiesPage() {
                   <td className="num" data-label="想定売却価格">
                     {p.estimated_sale_price == null ? "-" : yen(p.estimated_sale_price)}
                   </td>
-                  <td className="num" data-label="累計入金額">
+                  <td className="num" data-label="累計入金額（請求ログ）">
                     {yen(paid)}
                   </td>
                   <td className="num" data-label="回収率">

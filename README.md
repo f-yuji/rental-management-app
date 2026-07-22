@@ -55,6 +55,8 @@ npm run build
    - `supabase/migrations/008_contract_initial_fees.sql`
    - `supabase/migrations/009_contract_termination_reason.sql`
    - `supabase/migrations/010_contract_and_property_refinement.sql`
+   - `supabase/migrations/011_allow_overpayment.sql`
+   - `supabase/migrations/012_remove_legacy_payment_cap.sql`
 3. Authentication > Users > Add userからログインユーザーを作成します。
 4. `.env.local`へProject URL、anon key、service role keyを設定します。
 5. 必要なら`supabase/seed.sql`先頭のUUIDを作成したユーザーIDへ置換して実行します。
@@ -70,6 +72,10 @@ npm run build
 `009`は契約の終了理由を追加します。終了理由が「更新による終了」で、同一区画の次契約が翌日から始まる場合、区画の契約継続期間・空室日数・稼働率は更新前後を連続した稼働として計算します。
 
 `010`は契約種別・終了理由・状態を整理し、保証会社マスタ、振込口座マスタ、物件の想定売却価格を追加します。既存の「継続」は「一般契約」、「退去」「解約」は「途中解約」へ移行されます。また請求処理を、設定値にかかわらず契約開始月のみ日割りし、終了月は満額とする仕様へ更新します。
+
+`011`は開始月請求の再計算後も実際の入金額を保持できるよう、過入金を許可します。通常の入金編集画面では引き続き請求額を超える入力を禁止します。
+
+`012`は初期migrationが自動命名した旧入金上限制約を削除します。`011`を先に適用済みの既存環境で必要です。
 
 ## 保存仕様
 

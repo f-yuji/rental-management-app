@@ -1,4 +1,14 @@
 "use client";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceDot,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { useApp } from "@/components/app-provider";
 import { Badge, Kpi, PageHeader } from "@/components/ui/shared";
 import {
@@ -10,6 +20,7 @@ import {
   totalInvestment,
 } from "@/lib/calculations";
 import { dateLabel, percent, yen } from "@/lib/format";
+import { cumulativePaymentSeries } from "@/lib/dashboard-series";
 export function Dashboard() {
   const { data } = useApp();
   const active = data.contracts.filter((c) =>
@@ -51,6 +62,12 @@ export function Dashboard() {
     paid,
     outstanding: totalOutstanding,
   } = cumulativeTotals(data.settings, data.charges);
+  const paymentSeries = cumulativePaymentSeries(
+    data.settings,
+    data.charges,
+    data.properties,
+  );
+  const acquisitionEvents = paymentSeries.filter((point) => point.acquisitions.length);
   const deadlines = [
     ...data.contracts
       .flatMap((contract) =>
@@ -221,6 +238,59 @@ export function Dashboard() {
           </div>
         </section>
       </div>
+      <section className="panel cumulative-chart-panel">
+        <div className="section-head">
+          <div>
+            <h2>累計入金額の推移</h2>
+            <p>運用開始前の初期累計を含む、全期間の実入金額</p>
+          </div>
+          <strong>{yen(paid)}</strong>
+        </div>
+        {!paymentSeries.length ? (
+          <p className="empty">入金データはまだありません</p>
+        ) : (
+          <div className="cumulative-chart" aria-label="累計入金額の推移グラフ">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={paymentSeries} margin={{ top: 14, right: 18, left: 8, bottom: 4 }}>
+                <CartesianGrid stroke="#e4e9e6" vertical={false} />
+                <XAxis dataKey="month" tickFormatter={(value: string) => value.replace("-", "/")} tick={{ fontSize: 12 }} minTickGap={24} />
+                <YAxis width={72} tickFormatter={compactYen} tick={{ fontSize: 12 }} />
+                <Tooltip
+                  labelFormatter={(label) => `${String(label).replace("-", "/")}時点`}
+                  formatter={(value) => [yen(Number(value)), "累計入金額"]}
+                  contentStyle={{ borderRadius: 6, borderColor: "#d9e1dc" }}
+                />
+                <Line type="monotone" dataKey="cumulativePaid" name="累計入金額" stroke="#087a58" strokeWidth={3} dot={{ r: 3, fill: "#087a58" }} activeDot={{ r: 5 }} />
+                {acquisitionEvents.map((event) => (
+                  <ReferenceDot
+                    key={event.month}
+                    x={event.month}
+                    y={event.cumulativePaid}
+                    r={6}
+                    fill="#b45309"
+                    stroke="#ffffff"
+                    strokeWidth={2}
+                    label={{ value: "取得", position: "top", fill: "#92400e", fontSize: 11 }}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+        {!!acquisitionEvents.length && (
+          <div className="acquisition-events">
+            {data.properties
+              .filter((property) => property.acquisition_date)
+              .sort((a, b) => (a.acquisition_date ?? "").localeCompare(b.acquisition_date ?? ""))
+              .map((property) => (
+                <span key={property.id}>
+                  <i />
+                  {dateLabel(property.acquisition_date)}　{property.name}
+                </span>
+              ))}
+          </div>
+        )}
+      </section>
       <section className="panel">
         <div className="section-head">
           <h2>期限一覧</h2>
@@ -325,4 +395,10 @@ export function Dashboard() {
       </div>
     </>
   );
+}
+
+function compactYen(value: number) {
+  if (Math.abs(value) >= 100000000) return `${Math.round(value / 100000000)}億`;
+  if (Math.abs(value) >= 10000) return `${Math.round(value / 10000)}万`;
+  return String(value);
 }

@@ -11,10 +11,14 @@ supabase/migrations/007_reminder_and_relation_cleanup.sql
 supabase/migrations/008_contract_initial_fees.sql
 supabase/migrations/009_contract_termination_reason.sql
 supabase/migrations/010_contract_and_property_refinement.sql
+supabase/migrations/011_allow_overpayment.sql
+supabase/migrations/012_remove_legacy_payment_cap.sql
 
 ※ SQLファイルの内容をSupabase Dashboard > SQL Editorへ貼り付けて実行します。
 ※ 実行済みの番号は飛ばし、未実行分だけを番号順に適用します。
 ※ 010は保証会社・振込口座マスタ、想定売却価格、契約区分整理、開始月日割りを追加します。
+※ 011は既存請求の再計算で実入金を維持するため、過入金を許可します。
+※ 012は既存DBに残った旧入金上限制約を削除します。
 
 2. プロジェクトへ移動
 
@@ -52,4 +56,4 @@ https://rental-management-app.fly.dev/
 
 注意
 ・Supabaseのanon keyやservice role keyをこのファイルやGitへ記載しないでください。
-・画面で新しいDB項目を使用する前に、必ず未実行のmigrationを010まで実行してください。
+・画面で新しいDB項目を使用する前に、必ず未実行のmigrationを012まで実行してください。

@@ -32,6 +32,11 @@ describe("既存開始月請求の再計算", () => {
     expect(previewStartMonthRecalculations([contract], [{ ...charge, billing_month: "2024-01-01" }])).toEqual([]);
   });
   it("すでに正しい金額なら対象にしない", () => {
-    expect(previewStartMonthRecalculations([contract], [{ ...charge, billed_amount: 4355 }])).toEqual([]);
+    expect(previewStartMonthRecalculations([contract], [{ ...charge, billed_amount: 4355, paid_amount: 4355 }])).toEqual([]);
+  });
+  it("請求額だけ再計算済みでも過入金が残れば対象にする", () => {
+    const [row] = previewStartMonthRecalculations([contract], [{ ...charge, billed_amount: 4355 }]);
+    expect(row.recalculatedAmount).toBe(4355);
+    expect(row.charge.paid_amount).toBe(27000);
   });
 });

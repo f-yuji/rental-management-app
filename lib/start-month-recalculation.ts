@@ -20,7 +20,11 @@ export function previewStartMonthRecalculations(
     if (!contract || charge.billing_month.slice(0, 7) !== contract.start_date.slice(0, 7))
       return [];
     const recalculatedAmount = calculateCharge(contract, charge.billing_month, true);
-    if (recalculatedAmount === charge.billed_amount) return [];
+    if (
+      recalculatedAmount === charge.billed_amount &&
+      charge.paid_amount <= recalculatedAmount
+    )
+      return [];
     return [{
       charge,
       contract,
