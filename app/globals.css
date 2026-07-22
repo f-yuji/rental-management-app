@@ -402,6 +402,25 @@ textarea {
   justify-content: flex-end;
   gap: 3px;
 }
+.contract-group-row th {
+  background: #eef4f0;
+  color: #314b3e;
+  font-size: 13px;
+  font-weight: 750;
+  padding: 9px 14px;
+  text-align: left;
+}
+.proration-preview {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #b9d5c5;
+  background: #f0f8f3;
+  border-radius: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.proration-preview span { color: var(--muted); }
 .row-actions button,
 .modal header button,
 .mobile-header button,

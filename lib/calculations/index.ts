@@ -49,12 +49,12 @@ export const paymentStatus = (billed: number, paid: number): PaymentStatus =>
 export const billingKey = (month: string, contractId: string) =>
   `${month.slice(0, 7)}|${contractId}`;
 
-export type EffectiveContractStatus = "未開始" | "契約中" | "終了予定" | "終了" | "解約" | "下書き";
+export type EffectiveContractStatus = "未開始" | "契約中" | "終了予定" | "終了" | "下書き";
 export function effectiveContractStatus(
   contract: Pick<Contract, "start_date" | "end_date" | "status">,
   today = new Date(),
 ): EffectiveContractStatus {
-  if (contract.status === "下書き" || contract.status === "解約")
+  if (contract.status === "下書き")
     return contract.status;
   const current = startOfDay(today);
   const start = parseISO(contract.start_date);
@@ -109,7 +109,7 @@ export function isContractActiveInMonth(
   contract: Pick<Contract, "start_date" | "end_date" | "status">,
   month: string,
 ) {
-  if (["解約", "下書き"].includes(contract.status)) return false;
+  if (["終了", "下書き"].includes(contract.status)) return false;
   const first = startOfMonth(parseISO(month));
   const last = endOfMonth(first);
   const start = parseISO(contract.start_date);
@@ -128,8 +128,9 @@ export function calculateCharge(
     | "status"
   >,
   month: string,
-  prorate: boolean,
+  _prorate: boolean,
 ) {
+  void _prorate;
   if (!isContractActiveInMonth(contract, month)) return 0;
   const first = startOfMonth(parseISO(month));
   const last = endOfMonth(first);
@@ -140,15 +141,33 @@ export function calculateCharge(
       ? Number(contract.key_money ?? 0)
       : 0;
   if (isAfter(rentStart, last)) return keyMoney;
-  if (!prorate) return contract.monthly_rent + keyMoney;
+  if (rentStart.getDate() === 1 || startOfMonth(rentStart).getTime() !== first.getTime())
+    return contract.monthly_rent + keyMoney;
   const activeStart = isAfter(rentStart, first)
     ? rentStart
     : first;
-  const contractEnd = contract.end_date ? parseISO(contract.end_date) : last;
-  const activeEnd = isBefore(contractEnd, last) ? contractEnd : last;
+  const activeEnd = last;
   const days = differenceInCalendarDays(activeEnd, activeStart) + 1;
   return (
     Math.round((contract.monthly_rent * days) / getDaysInMonth(first)) +
     keyMoney
   );
+}
+
+export function startMonthProration(
+  startDate: string,
+  monthlyRent: number,
+  freeRentMonths = 0,
+) {
+  if (!startDate)
+    return { amount: 0, activeDays: 0, daysInMonth: 0, rentStartDate: "" };
+  const rentStart = addMonths(parseISO(startDate), freeRentMonths);
+  const daysInMonth = getDaysInMonth(rentStart);
+  const activeDays = daysInMonth - rentStart.getDate() + 1;
+  return {
+    amount: Math.round((monthlyRent * activeDays) / daysInMonth),
+    activeDays,
+    daysInMonth,
+    rentStartDate: `${rentStart.getFullYear()}-${String(rentStart.getMonth() + 1).padStart(2, "0")}-${String(rentStart.getDate()).padStart(2, "0")}`,
+  };
 }

@@ -1,17 +1,17 @@
 "use client";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import Link from "next/link";
 import { Copy, Eye, Pencil, RotateCcw, Search, Trash2 } from "lucide-react";
 import { useApp } from "@/components/app-provider";
 import { Badge, CsvButton, Modal, PageHeader, RecordSaveStatus } from "@/components/ui/shared";
 import { NumericInput } from "@/components/ui/numeric-input";
-import { effectiveContractStatus, outstanding } from "@/lib/calculations";
+import { effectiveContractStatus, outstanding, startMonthProration } from "@/lib/calculations";
 import { dateLabel, yen } from "@/lib/format";
 import {
   previewRetroactiveCharges,
   type RetroPaymentMode,
 } from "@/lib/retroactive-billing";
-import type { Contract, ContractStatus, ContractType } from "@/types";
+import type { Contract, ContractStatus, ContractType, TerminationReason } from "@/types";
 const blank = {
   contract_code: "",
   property_id: "",
@@ -27,18 +27,23 @@ const blank = {
   free_rent_months: 0,
   billing_day: 1,
   payment_due_day: 31,
-  contract_type: "継続" as ContractType,
+  contract_type: "一般契約" as ContractType,
   status: "契約中" as ContractStatus,
   deposit_amount: 0,
   renewal_date: "",
-  termination_reason: "",
+  termination_reason: "" as TerminationReason,
   renewal_method: "",
   auto_renew: false,
   requires_recontract: false,
   renewal_cycle_months: 24 as number | null,
   renewal_fee: 0,
   guarantor_enabled: false,
+  guarantee_company_master_id: "",
   guarantor_company_name: "",
+  guarantor_contact_name: "",
+  guarantor_phone: "",
+  guarantor_email: "",
+  guarantor_url: "",
   guarantor_contract_number: "",
   guarantor_start_date: "",
   guarantor_end_date: "",
@@ -46,6 +51,7 @@ const blank = {
   guarantor_fee: 0,
   guarantor_notes: "",
   bank_name: "",
+  bank_account_master_id: "",
   bank_branch: "",
   bank_account_type: "普通",
   bank_account_number: "",
@@ -67,19 +73,19 @@ export function ContractsPage() {
   const [newTemplate, setNewTemplate] = useState<Form | null>(null);
   const [pendingBackfill, setPendingBackfill] = useState<Contract | null>(null);
   const [newCode, setNewCode] = useState("");
-  const list = data.contracts.filter(
-    (c) => c.tenant_name.includes(query) || c.contract_code.includes(query),
-  );
+  const list = data.contracts
+    .filter((c) => c.tenant_name.includes(query) || c.contract_code.includes(query))
+    .sort(compareContracts);
   const save = async (f: Form) => {
     f = { ...f, contract_code: f.contract_code.trim().toUpperCase() };
     if (f.cancellation_completed_date) {
       f = {
         ...f,
         end_date: f.end_date || f.cancellation_completed_date,
-        status: "解約",
+        status: "終了",
       };
     } else if (f.cancellation_planned_date && !f.end_date) {
-      f = { ...f, end_date: f.cancellation_planned_date, status: "終了予定" };
+      f = { ...f, end_date: f.cancellation_planned_date, status: "契約中" };
     }
     if (!f.contract_code)
       f.contract_code = await actions.nextCode(
@@ -98,7 +104,7 @@ export function ContractsPage() {
       (c) =>
         c.id !== (editing as Contract)?.id &&
         c.unit_id === f.unit_id &&
-        !["終了", "解約", "下書き"].includes(c.status) &&
+        !["終了", "下書き"].includes(c.status) &&
         c.start_date <= (f.end_date || "9999-12-31") &&
         (c.end_date || "9999-12-31") >= f.start_date,
     );
@@ -116,11 +122,13 @@ export function ContractsPage() {
         end_date: f.end_date || null,
         renewal_date: f.renewal_date || null,
         guarantor_start_date: f.guarantor_start_date || null,
+        guarantee_company_master_id: f.guarantee_company_master_id || null,
         guarantor_end_date: f.guarantor_end_date || null,
         guarantor_renewal_date: f.guarantor_renewal_date || null,
         cancellation_notice_date: f.cancellation_notice_date || null,
         cancellation_planned_date: f.cancellation_planned_date || null,
         cancellation_completed_date: f.cancellation_completed_date || null,
+        bank_account_master_id: f.bank_account_master_id || null,
       };
     if (editing === "new") {
       const created = {
@@ -220,7 +228,7 @@ export function ContractsPage() {
             </tr>
           </thead>
           <tbody>
-            {list.map((c) => {
+            {list.map((c, index) => {
               const currentMonth = new Date()
                   .toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" })
                   .slice(0, 7),
@@ -231,8 +239,12 @@ export function ContractsPage() {
                 ),
                 b = charges.reduce((s, x) => s + x.billed_amount, 0),
                 p = charges.reduce((s, x) => s + x.paid_amount, 0);
+              const group = contractGroup(c);
+              const showGroup = index === 0 || contractGroup(list[index - 1]) !== group;
               return (
-                <tr key={c.id}>
+                <Fragment key={c.id}>
+                {showGroup && <tr className="contract-group-row"><th colSpan={11}>{group}</th></tr>}
+                <tr>
                   <td>
                     <b>{c.contract_code}</b>
                     <small>{c.contract_type}</small>
@@ -339,6 +351,7 @@ export function ContractsPage() {
                     </button>
                   </td>
                 </tr>
+                </Fragment>
               );
             })}
           </tbody>
@@ -360,6 +373,8 @@ export function ContractsPage() {
           }
           properties={data.properties}
           units={data.units}
+          guaranteeMasters={data.guaranteeCompanyMasters}
+          bankMasters={data.bankAccountMasters}
           onClose={() => setEditing(null)}
           onSave={save}
         />
@@ -381,6 +396,20 @@ export function ContractsPage() {
   );
 }
 
+type ContractGroup = "契約中" | "更新による終了" | "終了";
+function contractGroup(contract: Contract): ContractGroup {
+  if (effectiveContractStatus(contract) !== "終了") return "契約中";
+  return contract.termination_reason === "更新" ? "更新による終了" : "終了";
+}
+function compareContracts(a: Contract, b: Contract) {
+  const order: Record<ContractGroup, number> = { 契約中: 0, 更新による終了: 1, 終了: 2 };
+  const groupDiff = order[contractGroup(a)] - order[contractGroup(b)];
+  if (groupDiff) return groupDiff;
+  if (contractGroup(a) === "契約中")
+    return (a.end_date ?? "9999-12-31").localeCompare(b.end_date ?? "9999-12-31");
+  return (b.end_date ?? "").localeCompare(a.end_date ?? "");
+}
+
 function contractToForm(contract: Contract): Form {
   return {
     ...contract,
@@ -392,6 +421,8 @@ function contractToForm(contract: Contract): Form {
     guarantor_start_date: contract.guarantor_start_date || "",
     guarantor_end_date: contract.guarantor_end_date || "",
     guarantor_renewal_date: contract.guarantor_renewal_date || "",
+    guarantee_company_master_id: contract.guarantee_company_master_id || "",
+    bank_account_master_id: contract.bank_account_master_id || "",
     cancellation_notice_date: contract.cancellation_notice_date || "",
     cancellation_planned_date: contract.cancellation_planned_date || "",
     cancellation_completed_date: contract.cancellation_completed_date || "",
@@ -466,6 +497,8 @@ function ContractForm({
   initial,
   properties,
   units,
+  guaranteeMasters,
+  bankMasters,
   onClose,
   onSave,
 }: {
@@ -473,11 +506,18 @@ function ContractForm({
   initial: Form;
   properties: { id: string; name: string }[];
   units: { id: string; property_id: string; name: string }[];
+  guaranteeMasters: ReturnType<typeof useApp>["data"]["guaranteeCompanyMasters"];
+  bankMasters: ReturnType<typeof useApp>["data"]["bankAccountMasters"];
   onClose: () => void;
   onSave: (x: Form) => void;
 }) {
   const [f, setF] = useState(initial);
   const available = units.filter((u) => u.property_id === f.property_id);
+  const proration = startMonthProration(
+    f.start_date,
+    f.monthly_rent,
+    f.free_rent_months,
+  );
   return (
     <Modal title={isNew ? "契約を登録" : "契約を編集"} onClose={onClose}>
       <form
@@ -602,6 +642,15 @@ function ContractForm({
               }
             />
           </label>
+          {f.start_date && (
+            <div className="proration-preview form-span">
+              <b>開始月請求予定額：{yen(proration.amount + f.key_money)}</b>
+              <span>
+                賃料対象日数：{proration.activeDays}日 / {proration.daysInMonth}日
+                {f.key_money > 0 ? `（礼金 ${yen(f.key_money)}を含む）` : ""}
+              </span>
+            </div>
+          )}
           <label>
             毎月の請求日（自動生成）
             <NumericInput
@@ -670,6 +719,33 @@ function ContractForm({
             要再契約
           </label>
           <h3 className="form-section-title">保証会社</h3>
+          <label className="form-span">
+            保証会社マスタから入力
+            <select
+              value={f.guarantee_company_master_id}
+              onChange={(e) => {
+                const master = guaranteeMasters.find((x) => x.id === e.target.value);
+                setF(master ? {
+                  ...f,
+                  guarantee_company_master_id: master.id,
+                  guarantor_enabled: true,
+                  guarantor_company_name: master.name,
+                  guarantor_contact_name: master.contact_name,
+                  guarantor_phone: master.phone,
+                  guarantor_email: master.email,
+                  guarantor_url: master.url,
+                  guarantor_notes: master.notes,
+                  guarantor_fee: master.renewal_fee,
+                  guarantor_contract_number: master.contract_number_default,
+                } : { ...f, guarantee_company_master_id: "" });
+              }}
+            >
+              <option value="">選択なし</option>
+              {guaranteeMasters.filter((x) => x.is_active).map((x) => (
+                <option key={x.id} value={x.id}>{x.name}</option>
+              ))}
+            </select>
+          </label>
           <label className="check">
             <input
               type="checkbox"
@@ -698,6 +774,10 @@ function ContractForm({
               }
             />
           </label>
+          <label>担当者名<input value={f.guarantor_contact_name} onChange={(e) => setF({ ...f, guarantor_contact_name: e.target.value })} /></label>
+          <label>電話番号<input value={f.guarantor_phone} onChange={(e) => setF({ ...f, guarantor_phone: e.target.value })} /></label>
+          <label>メールアドレス<input type="email" value={f.guarantor_email} onChange={(e) => setF({ ...f, guarantor_email: e.target.value })} /></label>
+          <label>URL<input type="url" value={f.guarantor_url} onChange={(e) => setF({ ...f, guarantor_url: e.target.value })} /></label>
           <label>
             保証開始日
             <input
@@ -745,6 +825,29 @@ function ContractForm({
             />
           </label>
           <h3 className="form-section-title">振込先口座</h3>
+          <label className="form-span">
+            口座マスタから入力
+            <select
+              value={f.bank_account_master_id}
+              onChange={(e) => {
+                const master = bankMasters.find((x) => x.id === e.target.value);
+                setF(master ? {
+                  ...f,
+                  bank_account_master_id: master.id,
+                  bank_name: master.bank_name,
+                  bank_branch: master.branch_name,
+                  bank_account_type: master.account_type,
+                  bank_account_number: master.account_number,
+                  bank_account_holder: master.account_holder,
+                } : { ...f, bank_account_master_id: "" });
+              }}
+            >
+              <option value="">選択なし</option>
+              {bankMasters.filter((x) => x.is_active).map((x) => (
+                <option key={x.id} value={x.id}>{x.account_name}</option>
+              ))}
+            </select>
+          </label>
           <label>
             銀行
             <input
@@ -868,7 +971,7 @@ function ContractForm({
                 setF({ ...f, status: e.target.value as ContractStatus })
               }
             >
-              {["契約中", "終了予定", "終了", "解約", "下書き"].map((x) => (
+              {["契約中", "終了", "下書き"].map((x) => (
                 <option key={x}>{x}</option>
               ))}
             </select>
@@ -878,13 +981,15 @@ function ContractForm({
             <select
               value={f.termination_reason}
               onChange={(e) =>
-                setF({ ...f, termination_reason: e.target.value })
+                setF({ ...f, termination_reason: e.target.value as TerminationReason })
               }
             >
               <option value="">未設定</option>
-              <option>更新による終了</option>
-              <option>退去</option>
-              <option>解約</option>
+              <option>契約満了</option>
+              <option>途中解約</option>
+              <option>更新</option>
+              <option>貸主都合</option>
+              <option>滞納・強制終了</option>
               <option>その他</option>
             </select>
           </label>
@@ -896,7 +1001,7 @@ function ContractForm({
                 setF({ ...f, contract_type: e.target.value as ContractType })
               }
             >
-              {["継続", "定期", "短期", "その他"].map((x) => (
+              {["一般契約", "定期契約", "短期契約", "その他"].map((x) => (
                 <option key={x}>{x}</option>
               ))}
             </select>

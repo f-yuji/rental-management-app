@@ -4,6 +4,8 @@ import type {
   AttachmentCategory,
   AppSettings,
   Contract,
+  GuaranteeCompanyMaster,
+  BankAccountMaster,
   MonthlyCharge,
   Property,
   PurchaseAssumptions,
@@ -230,6 +232,17 @@ export function createAppRepository(client: SupabaseClient, userId: string) {
     updateReminder: (id: string, patch: Partial<Reminder>) =>
       update("reminders", id, patch),
     deleteReminder: (id: string) => remove("reminders", id),
+    createGuaranteeCompanyMaster: (row: GuaranteeCompanyMaster) =>
+      insert("guarantee_company_masters", row),
+    updateGuaranteeCompanyMaster: (id: string, patch: Partial<GuaranteeCompanyMaster>) =>
+      update("guarantee_company_masters", id, patch),
+    deleteGuaranteeCompanyMaster: (id: string) =>
+      remove("guarantee_company_masters", id),
+    createBankAccountMaster: (row: BankAccountMaster) =>
+      insert("bank_account_masters", row),
+    updateBankAccountMaster: (id: string, patch: Partial<BankAccountMaster>) =>
+      update("bank_account_masters", id, patch),
+    deleteBankAccountMaster: (id: string) => remove("bank_account_masters", id),
     uploadAttachment: async (
       contractId: string,
       category: AttachmentCategory,

@@ -22,6 +22,8 @@ import type {
   Attachment,
   AttachmentCategory,
   Contract,
+  GuaranteeCompanyMaster,
+  BankAccountMaster,
   MonthlyCharge,
   Property,
   PurchaseAssumptions,
@@ -53,6 +55,12 @@ type Actions = {
   createReminder(row: Reminder): Promise<void>;
   updateReminder(id: string, patch: Partial<Reminder>): Promise<void>;
   deleteReminder(id: string): Promise<void>;
+  createGuaranteeCompanyMaster(row: GuaranteeCompanyMaster): Promise<void>;
+  updateGuaranteeCompanyMaster(id: string, patch: Partial<GuaranteeCompanyMaster>): Promise<void>;
+  deleteGuaranteeCompanyMaster(id: string): Promise<void>;
+  createBankAccountMaster(row: BankAccountMaster): Promise<void>;
+  updateBankAccountMaster(id: string, patch: Partial<BankAccountMaster>): Promise<void>;
+  deleteBankAccountMaster(id: string): Promise<void>;
   uploadAttachment(
     contractId: string,
     category: AttachmentCategory,
@@ -95,7 +103,16 @@ const emptyData: AppData = {
   tasks: [],
   reminders: [],
   attachments: [],
+  guaranteeCompanyMasters: [],
+  bankAccountMasters: [],
 };
+const normalizeProperty = (row: Property): Property => ({
+  ...row,
+  estimated_sale_price:
+    row.estimated_sale_price == null ? null : Number(row.estimated_sale_price),
+  estimated_sale_price_updated_at: row.estimated_sale_price_updated_at ?? null,
+  estimated_sale_price_notes: row.estimated_sale_price_notes ?? "",
+});
 const assumptionsFromDb = (
   row?: Record<string, unknown>,
 ): PurchaseAssumptions =>
@@ -121,7 +138,12 @@ const normalizeContract = (row: Contract): Contract => ({
   renewal_cycle_months: row.renewal_cycle_months ?? null,
   renewal_fee: Number(row.renewal_fee ?? 0),
   guarantor_enabled: row.guarantor_enabled ?? false,
+  guarantee_company_master_id: row.guarantee_company_master_id ?? null,
   guarantor_company_name: row.guarantor_company_name ?? "",
+  guarantor_contact_name: row.guarantor_contact_name ?? "",
+  guarantor_phone: row.guarantor_phone ?? "",
+  guarantor_email: row.guarantor_email ?? "",
+  guarantor_url: row.guarantor_url ?? "",
   guarantor_contract_number: row.guarantor_contract_number ?? "",
   guarantor_start_date: row.guarantor_start_date ?? null,
   guarantor_end_date: row.guarantor_end_date ?? null,
@@ -129,6 +151,7 @@ const normalizeContract = (row: Contract): Contract => ({
   guarantor_fee: Number(row.guarantor_fee ?? 0),
   guarantor_notes: row.guarantor_notes ?? "",
   bank_name: row.bank_name ?? "",
+  bank_account_master_id: row.bank_account_master_id ?? null,
   bank_branch: row.bank_branch ?? "",
   bank_account_type: row.bank_account_type ?? "",
   bank_account_number: row.bank_account_number ?? "",
@@ -227,6 +250,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           .from("attachments")
           .select("*")
           .order("created_at", { ascending: false }),
+        supabase.from("guarantee_company_masters").select("*").order("display_order"),
+        supabase.from("bank_account_masters").select("*").order("display_order"),
       ]);
       const failed = results.slice(0, 7).find((x) => x.error)?.error;
       if (failed) {
@@ -246,8 +271,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         tasks,
         reminders,
         attachments,
+        guaranteeMasters,
+        bankMasters,
       ] = results;
-      for (const optional of [tasks, reminders, attachments]) {
+      for (const optional of [tasks, reminders, attachments, guaranteeMasters, bankMasters]) {
         if (optional.error)
           console.warn(
             "Optional rental feature is not migrated yet:",
@@ -255,7 +282,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           );
       }
       setData({
-        properties: (properties.data ?? []) as Property[],
+        properties: ((properties.data ?? []) as Property[]).map(normalizeProperty),
         units: (units.data ?? []) as Unit[],
         contracts: ((contracts.data ?? []) as Contract[]).map(
           normalizeContract,
@@ -285,6 +312,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         tasks: (tasks.data ?? []) as Task[],
         reminders: (reminders.data ?? []) as Reminder[],
         attachments: (attachments.data ?? []) as Attachment[],
+        guaranteeCompanyMasters: (guaranteeMasters.data ?? []) as GuaranteeCompanyMaster[],
+        bankAccountMasters: (bankMasters.data ?? []) as BankAccountMaster[],
       });
       setSyncState("saved");
       setReady(true);
@@ -358,7 +387,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         | "charges"
         | "tasks"
         | "reminders"
-        | "attachments",
+        | "attachments"
+        | "guaranteeCompanyMasters"
+        | "bankAccountMasters",
     >(
       key: K,
       row: AppData[K][number],
@@ -370,7 +401,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         | "contracts"
         | "charges"
         | "tasks"
-        | "reminders",
+        | "reminders"
+        | "guaranteeCompanyMasters"
+        | "bankAccountMasters",
     >(
       key: K,
       id: string,
@@ -390,7 +423,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         | "charges"
         | "tasks"
         | "reminders"
-        | "attachments",
+        | "attachments"
+        | "guaranteeCompanyMasters"
+        | "bankAccountMasters",
     >(
       key: K,
       id: string,
@@ -602,6 +637,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           () => repository?.deleteReminder(id) ?? Promise.resolve(),
         );
         remove("reminders", id);
+      },
+      async createGuaranteeCompanyMaster(row) {
+        add("guaranteeCompanyMasters", row);
+        await persist(`guarantee-master:${row.id}`, () =>
+          repository?.createGuaranteeCompanyMaster(row) ?? Promise.resolve());
+      },
+      async updateGuaranteeCompanyMaster(id, values) {
+        patch("guaranteeCompanyMasters", id, values);
+        await persist(`guarantee-master:${id}`, () =>
+          repository?.updateGuaranteeCompanyMaster(id, values) ?? Promise.resolve());
+      },
+      async deleteGuaranteeCompanyMaster(id) {
+        await persist(`guarantee-master:${id}`, () =>
+          repository?.deleteGuaranteeCompanyMaster(id) ?? Promise.resolve());
+        remove("guaranteeCompanyMasters", id);
+      },
+      async createBankAccountMaster(row) {
+        add("bankAccountMasters", row);
+        await persist(`bank-master:${row.id}`, () =>
+          repository?.createBankAccountMaster(row) ?? Promise.resolve());
+      },
+      async updateBankAccountMaster(id, values) {
+        patch("bankAccountMasters", id, values);
+        await persist(`bank-master:${id}`, () =>
+          repository?.updateBankAccountMaster(id, values) ?? Promise.resolve());
+      },
+      async deleteBankAccountMaster(id) {
+        await persist(`bank-master:${id}`, () =>
+          repository?.deleteBankAccountMaster(id) ?? Promise.resolve());
+        remove("bankAccountMasters", id);
       },
       async uploadAttachment(contractId, category, file) {
         if (!repository) {

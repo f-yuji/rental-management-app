@@ -8,8 +8,16 @@ export type PropertyType =
   | "その他"
   | string;
 export type UnitStatus = "空き" | "稼働" | "募集中" | "使用停止";
-export type ContractStatus = "契約中" | "終了予定" | "終了" | "解約" | "下書き";
-export type ContractType = "継続" | "定期" | "短期" | "その他";
+export type ContractStatus = "契約中" | "終了" | "下書き";
+export type ContractType = "一般契約" | "定期契約" | "短期契約" | "その他";
+export type TerminationReason =
+  | ""
+  | "契約満了"
+  | "途中解約"
+  | "更新"
+  | "貸主都合"
+  | "滞納・強制終了"
+  | "その他";
 export type PaymentStatus = "未入金" | "一部入金" | "入金済" | "対象外";
 
 export interface Property {
@@ -24,6 +32,9 @@ export interface Property {
   acquisition_costs: number;
   development_costs: number;
   current_valuation: number;
+  estimated_sale_price: number | null;
+  estimated_sale_price_updated_at: string | null;
+  estimated_sale_price_notes: string;
   remaining_debt: number;
   annual_property_tax: number;
   notes: string;
@@ -68,14 +79,19 @@ export interface Contract {
   status: ContractStatus;
   deposit_amount: number;
   renewal_date: string | null;
-  termination_reason: string;
+  termination_reason: TerminationReason;
   renewal_method: string;
   auto_renew: boolean;
   requires_recontract: boolean;
   renewal_cycle_months: number | null;
   renewal_fee: number;
   guarantor_enabled: boolean;
+  guarantee_company_master_id: string | null;
   guarantor_company_name: string;
+  guarantor_contact_name: string;
+  guarantor_phone: string;
+  guarantor_email: string;
+  guarantor_url: string;
   guarantor_contract_number: string;
   guarantor_start_date: string | null;
   guarantor_end_date: string | null;
@@ -83,6 +99,7 @@ export interface Contract {
   guarantor_fee: number;
   guarantor_notes: string;
   bank_name: string;
+  bank_account_master_id: string | null;
   bank_branch: string;
   bank_account_type: string;
   bank_account_number: string;
@@ -95,6 +112,40 @@ export interface Contract {
   deposit_refund: number;
   cancellation_notes: string;
   notes: string;
+  created_at: string;
+  updated_at: string;
+}
+export interface GuaranteeCompanyMaster {
+  id: string;
+  user_id: string;
+  name: string;
+  contact_name: string;
+  phone: string;
+  email: string;
+  notes: string;
+  display_order: number;
+  is_active: boolean;
+  renewal_cycle_months: number | null;
+  renewal_fee: number;
+  contract_number_default: string;
+  url: string;
+  created_at: string;
+  updated_at: string;
+}
+export interface BankAccountMaster {
+  id: string;
+  user_id: string;
+  account_name: string;
+  bank_name: string;
+  bank_code: string;
+  branch_name: string;
+  branch_code: string;
+  account_type: string;
+  account_number: string;
+  account_holder: string;
+  notes: string;
+  display_order: number;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -211,4 +262,6 @@ export interface AppData {
   tasks: Task[];
   reminders: Reminder[];
   attachments: Attachment[];
+  guaranteeCompanyMasters: GuaranteeCompanyMaster[];
+  bankAccountMasters: BankAccountMaster[];
 }

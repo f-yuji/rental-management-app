@@ -6,9 +6,15 @@
 supabase/migrations/003_improve_settings_and_codes.sql
 supabase/migrations/004_remove_actual_monthly_rent.sql
 supabase/migrations/005_operations_tasks_documents.sql
+supabase/migrations/006_automatic_billing.sql
+supabase/migrations/007_reminder_and_relation_cleanup.sql
+supabase/migrations/008_contract_initial_fees.sql
+supabase/migrations/009_contract_termination_reason.sql
+supabase/migrations/010_contract_and_property_refinement.sql
 
 ※ SQLファイルの内容をSupabase Dashboard > SQL Editorへ貼り付けて実行します。
-※ 005は契約拡張、tasks、reminders、attachments、契約書類Storage bucketとRLSを追加します。
+※ 実行済みの番号は飛ばし、未実行分だけを番号順に適用します。
+※ 010は保証会社・振込口座マスタ、想定売却価格、契約区分整理、開始月日割りを追加します。
 
 2. プロジェクトへ移動
 
@@ -26,7 +32,7 @@ npm run build
 
 git status
 git add README.md DEPLOY_COMMANDS.txt app components lib types supabase/migrations
-git commit -m "Expand rental operations and reminders"
+git commit -m "Refine contracts and property metrics"
 git push origin main
 
 5. Fly.ioへデプロイ
@@ -46,4 +52,4 @@ https://rental-management-app.fly.dev/
 
 注意
 ・Supabaseのanon keyやservice role keyをこのファイルやGitへ記載しないでください。
-・画面で新しいDB項目を使用する前に、必ずmigration 003～005を実行してください。
+・画面で新しいDB項目を使用する前に、必ず未実行のmigrationを010まで実行してください。

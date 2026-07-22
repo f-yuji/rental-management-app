@@ -53,6 +53,7 @@ npm run build
    - `supabase/migrations/007_reminder_and_relation_cleanup.sql`
    - `supabase/migrations/008_contract_initial_fees.sql`
    - `supabase/migrations/009_contract_termination_reason.sql`
+   - `supabase/migrations/010_contract_and_property_refinement.sql`
 3. Authentication > Users > Add userからログインユーザーを作成します。
 4. `.env.local`へProject URL、anon key、service role keyを設定します。
 5. 必要なら`supabase/seed.sql`先頭のUUIDを作成したユーザーIDへ置換して実行します。
@@ -66,6 +67,8 @@ npm run build
 `008`は契約の礼金とフリーレント月数を追加します。礼金は契約開始月の請求収入へ一度だけ加算し、敷金は既存の預かり金項目として収益には含めません。フリーレント期間中の賃料は発生せず、日割りONの場合は賃料発生日から月末までを日割りします。
 
 `009`は契約の終了理由を追加します。終了理由が「更新による終了」で、同一区画の次契約が翌日から始まる場合、区画の契約継続期間・空室日数・稼働率は更新前後を連続した稼働として計算します。
+
+`010`は契約種別・終了理由・状態を整理し、保証会社マスタ、振込口座マスタ、物件の想定売却価格を追加します。既存の「継続」は「一般契約」、「退去」「解約」は「途中解約」へ移行されます。また請求処理を、設定値にかかわらず契約開始月のみ日割りし、終了月は満額とする仕様へ更新します。
 
 ## 保存仕様
 
@@ -87,8 +90,8 @@ npm run build
 - 純資産: 現在評価額 - 残債
 - 表面利回り: 満室月収 x 12 / 総投資額
 - 未収額: max(累計請求額 - 累計入金額, 0)
-- 日割りOFF: 対象月に1日でも契約があれば満額
-- 日割りON: 開始月と終了月を暦日数で日割りし、円未満を四捨五入
+- 契約開始月: 契約開始日（フリーレント設定時は賃料発生日）から月末までを暦日数で日割りし、円未満を四捨五入
+- 契約開始日の翌月以降: 月額満額。契約終了月は日割りしない
 
 ## CSV
 

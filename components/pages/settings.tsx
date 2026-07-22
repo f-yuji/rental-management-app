@@ -1,14 +1,26 @@
 "use client";
 import { useMemo, useState } from "react";
-import { History, Save } from "lucide-react";
+import { History, Pencil, Save, Trash2 } from "lucide-react";
 import { useApp } from "@/components/app-provider";
 import { NumericInput } from "@/components/ui/numeric-input";
-import { PageHeader } from "@/components/ui/shared";
+import { Modal, PageHeader } from "@/components/ui/shared";
 import {
   previewRetroactiveCharges,
   type RetroPaymentMode,
 } from "@/lib/retroactive-billing";
 import { yen } from "@/lib/format";
+import type { BankAccountMaster, GuaranteeCompanyMaster } from "@/types";
+
+const guaranteeBlank = {
+  name: "", contact_name: "", phone: "", email: "", notes: "",
+  display_order: 0, is_active: true, renewal_cycle_months: 24 as number | null,
+  renewal_fee: 0, contract_number_default: "", url: "",
+};
+const bankBlank = {
+  account_name: "", bank_name: "", bank_code: "", branch_name: "",
+  branch_code: "", account_type: "普通", account_number: "",
+  account_holder: "", notes: "", display_order: 0, is_active: true,
+};
 
 export function SettingsPage() {
   const { data, actions, syncState } = useApp(),
@@ -19,6 +31,8 @@ export function SettingsPage() {
   const [paymentMode, setPaymentMode] = useState<RetroPaymentMode>("unpaid"),
     [showPreview, setShowPreview] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [guaranteeEditing, setGuaranteeEditing] = useState<GuaranteeCompanyMaster | "new" | null>(null);
+  const [bankEditing, setBankEditing] = useState<BankAccountMaster | "new" | null>(null);
   const preview = useMemo(
     () =>
       previewRetroactiveCharges(
@@ -43,16 +57,7 @@ export function SettingsPage() {
             onChange={(value) => patch({ target_year: value })}
           />
         </label>
-        <label className="switch-row">
-          <span>
-            日割計算<small>開始月と終了月を暦日数で日割りします</small>
-          </span>
-          <input
-            type="checkbox"
-            checked={s.prorate_enabled}
-            onChange={(e) => patch({ prorate_enabled: e.target.checked })}
-          />
-        </label>
+        <div className="info-box">契約開始月は開始日から月末まで自動で日割りします。終了月は満額請求です。</div>
         <label>
           標準請求日
           <NumericInput
@@ -213,6 +218,90 @@ export function SettingsPage() {
         )}
         {result && <p className="success-box">{result}</p>}
       </section>
+      <MasterSection
+        title="保証会社マスタ"
+        rows={data.guaranteeCompanyMasters.map((x) => ({ id: x.id, name: x.name, sub: `${x.contact_name || "担当者未設定"} / ${x.phone || "電話未設定"}`, active: x.is_active }))}
+        onNew={() => setGuaranteeEditing("new")}
+        onEdit={(id) => setGuaranteeEditing(data.guaranteeCompanyMasters.find((x) => x.id === id) ?? null)}
+        onDelete={(id) => confirm("この保証会社マスタを削除しますか？過去契約の内容は残ります。") && void actions.deleteGuaranteeCompanyMaster(id)}
+      />
+      <MasterSection
+        title="振込口座マスタ"
+        rows={data.bankAccountMasters.map((x) => ({ id: x.id, name: x.account_name, sub: `${x.bank_name} ${x.branch_name} / ****${x.account_number.slice(-4)}`, active: x.is_active }))}
+        onNew={() => setBankEditing("new")}
+        onEdit={(id) => setBankEditing(data.bankAccountMasters.find((x) => x.id === id) ?? null)}
+        onDelete={(id) => confirm("この口座マスタを削除しますか？過去契約の内容は残ります。") && void actions.deleteBankAccountMaster(id)}
+      />
+      {guaranteeEditing && (
+        <GuaranteeMasterForm
+          initial={guaranteeEditing === "new" ? guaranteeBlank : guaranteeEditing}
+          onClose={() => setGuaranteeEditing(null)}
+          onSave={async (form) => {
+            const now = new Date().toISOString();
+            if (guaranteeEditing === "new") await actions.createGuaranteeCompanyMaster({ ...form, id: crypto.randomUUID(), user_id: "", created_at: now, updated_at: now });
+            else await actions.updateGuaranteeCompanyMaster(guaranteeEditing.id, { ...form, updated_at: now });
+            setGuaranteeEditing(null);
+          }}
+        />
+      )}
+      {bankEditing && (
+        <BankMasterForm
+          initial={bankEditing === "new" ? bankBlank : bankEditing}
+          onClose={() => setBankEditing(null)}
+          onSave={async (form) => {
+            const now = new Date().toISOString();
+            if (bankEditing === "new") await actions.createBankAccountMaster({ ...form, id: crypto.randomUUID(), user_id: "", created_at: now, updated_at: now });
+            else await actions.updateBankAccountMaster(bankEditing.id, { ...form, updated_at: now });
+            setBankEditing(null);
+          }}
+        />
+      )}
     </>
   );
+}
+
+function MasterSection({ title, rows, onNew, onEdit, onDelete }: {
+  title: string; rows: { id: string; name: string; sub: string; active: boolean }[];
+  onNew: () => void; onEdit: (id: string) => void; onDelete: (id: string) => void;
+}) {
+  return <section className="panel"><div className="section-head"><h2>{title}</h2><button className="primary" onClick={onNew}>新規登録</button></div>
+    {!rows.length ? <p className="empty">登録はありません</p> : <div className="simple-list">{rows.map((row) => <div key={row.id}><span><b>{row.name}</b><small>{row.sub} / {row.active ? "有効" : "無効"}</small></span><span className="row-actions"><button onClick={() => onEdit(row.id)} title="編集"><Pencil /></button><button onClick={() => onDelete(row.id)} title="削除"><Trash2 /></button></span></div>)}</div>}
+  </section>;
+}
+
+function GuaranteeMasterForm({ initial, onClose, onSave }: { initial: typeof guaranteeBlank; onClose: () => void; onSave: (form: typeof guaranteeBlank) => void }) {
+  const [f, setF] = useState(initial);
+  return <Modal title="保証会社マスタ" onClose={onClose}><form onSubmit={(e) => { e.preventDefault(); if (!f.name.trim()) return alert("名称は必須です"); onSave(f); }}><div className="form-grid">
+    <label>名称<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
+    <label>担当者名<input value={f.contact_name} onChange={(e) => setF({ ...f, contact_name: e.target.value })} /></label>
+    <label>電話番号<input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></label>
+    <label>メールアドレス<input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></label>
+    <label>URL<input type="url" value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} /></label>
+    <label>表示順<NumericInput value={f.display_order} onChange={(value) => setF({ ...f, display_order: value })} /></label>
+    <label>更新周期（月）<NumericInput value={f.renewal_cycle_months ?? 0} onChange={(value) => setF({ ...f, renewal_cycle_months: value || null })} /></label>
+    <label>更新料<NumericInput value={f.renewal_fee} format="currency" suffix="円" onChange={(value) => setF({ ...f, renewal_fee: value })} /></label>
+    <label>契約番号初期値<input value={f.contract_number_default} onChange={(e) => setF({ ...f, contract_number_default: e.target.value })} /></label>
+    <label className="check"><input type="checkbox" checked={f.is_active} onChange={(e) => setF({ ...f, is_active: e.target.checked })} />有効</label>
+    <label className="form-span">備考<textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></label>
+  </div><FormActions onClose={onClose} /></form></Modal>;
+}
+
+function BankMasterForm({ initial, onClose, onSave }: { initial: typeof bankBlank; onClose: () => void; onSave: (form: typeof bankBlank) => void }) {
+  const [f, setF] = useState(initial);
+  return <Modal title="振込口座マスタ" onClose={onClose}><form onSubmit={(e) => { e.preventDefault(); if (!f.account_name.trim()) return alert("口座名は必須です"); onSave(f); }}><div className="form-grid">
+    <label>口座名<input value={f.account_name} onChange={(e) => setF({ ...f, account_name: e.target.value })} /></label>
+    <label>金融機関名<input value={f.bank_name} onChange={(e) => setF({ ...f, bank_name: e.target.value })} /></label>
+    <label>金融機関コード<input value={f.bank_code} onChange={(e) => setF({ ...f, bank_code: e.target.value })} /></label>
+    <label>支店名<input value={f.branch_name} onChange={(e) => setF({ ...f, branch_name: e.target.value })} /></label>
+    <label>支店コード<input value={f.branch_code} onChange={(e) => setF({ ...f, branch_code: e.target.value })} /></label>
+    <label>口座種別<select value={f.account_type} onChange={(e) => setF({ ...f, account_type: e.target.value })}><option>普通</option><option>当座</option><option>貯蓄</option><option>その他</option></select></label>
+    <label>口座番号<input inputMode="numeric" value={f.account_number} onChange={(e) => setF({ ...f, account_number: e.target.value.replace(/\D/g, "") })} /></label>
+    <label>口座名義<input value={f.account_holder} onChange={(e) => setF({ ...f, account_holder: e.target.value })} /></label>
+    <label>表示順<NumericInput value={f.display_order} onChange={(value) => setF({ ...f, display_order: value })} /></label>
+    <label className="check"><input type="checkbox" checked={f.is_active} onChange={(e) => setF({ ...f, is_active: e.target.checked })} />有効</label>
+    <label className="form-span">備考<textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></label>
+  </div><FormActions onClose={onClose} /></form></Modal>;
+}
+function FormActions({ onClose }: { onClose: () => void }) {
+  return <div className="form-actions"><button type="button" className="secondary" onClick={onClose}>キャンセル</button><button className="primary">保存</button></div>;
 }

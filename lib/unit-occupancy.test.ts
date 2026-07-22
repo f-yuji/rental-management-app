@@ -31,7 +31,7 @@ describe("unit occupancy", () => {
     const previous = {
       ...contract("2024-01-01", "2025-12-31", "終了"),
       id: "old",
-      termination_reason: "更新による終了",
+      termination_reason: "更新",
     } as Contract;
     const current = {
       ...contract("2026-01-01", null),

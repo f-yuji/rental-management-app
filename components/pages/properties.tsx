@@ -1,10 +1,11 @@
 "use client";
 import { useState } from "react";
-import { Pencil, Search, Trash2 } from "lucide-react";
+import { Eye, Pencil, Search, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useApp } from "@/components/app-provider";
 import { CsvButton, Modal, PageHeader, RecordSaveStatus } from "@/components/ui/shared";
 import { NumericInput } from "@/components/ui/numeric-input";
-import { grossYield, netAssets, totalInvestment } from "@/lib/calculations";
+import { effectiveContractStatus, grossYield, totalInvestment } from "@/lib/calculations";
 import { percent, yen } from "@/lib/format";
 import type { Property } from "@/types";
 const blank = {
@@ -17,6 +18,9 @@ const blank = {
   acquisition_costs: 0,
   development_costs: 0,
   current_valuation: 0,
+  estimated_sale_price: null as number | null,
+  estimated_sale_price_updated_at: "",
+  estimated_sale_price_notes: "",
   remaining_debt: 0,
   annual_property_tax: 0,
   notes: "",
@@ -49,6 +53,8 @@ export function PropertiesPage() {
       await actions.createProperty({
         ...form,
         acquisition_date: form.acquisition_date || null,
+        estimated_sale_price_updated_at:
+          form.estimated_sale_price_updated_at || null,
         id: crypto.randomUUID(),
         user_id: currentUserId,
         created_at: stamp,
@@ -58,6 +64,8 @@ export function PropertiesPage() {
       await actions.updateProperty((editing as Property).id, {
         ...form,
         acquisition_date: form.acquisition_date || null,
+        estimated_sale_price_updated_at:
+          form.estimated_sale_price_updated_at || null,
         updated_at: stamp,
       });
     setEditing(null);
@@ -99,7 +107,7 @@ export function PropertiesPage() {
         <CsvButton
           filename="properties.csv"
           rows={[
-            ["物件コード", "物件名", "種別", "所在地", "総投資額", "評価額"],
+            ["物件コード", "物件名", "種別", "所在地", "取得総額", "固定資産評価額", "想定売却価格"],
             ...list.map((p) => [
               p.property_code,
               p.name,
@@ -107,6 +115,7 @@ export function PropertiesPage() {
               p.address,
               totalInvestment(p),
               p.current_valuation,
+              p.estimated_sale_price ?? "",
             ]),
           ]}
         />
@@ -122,9 +131,11 @@ export function PropertiesPage() {
               <th className="num">総投資額</th>
               <th className="num">年間賃料</th>
               <th className="num">取得価格</th>
-              <th className="num">現在評価額</th>
+              <th className="num">固定資産評価額</th>
               <th className="num">年間固定資産税</th>
-              <th className="num">純資産</th>
+              <th className="num">想定売却価格</th>
+              <th className="num">累計入金額</th>
+              <th className="num">回収率</th>
               <th className="num">表面利回り</th>
               <th />
             </tr>
@@ -139,9 +150,13 @@ export function PropertiesPage() {
                 .filter(
                   (c) =>
                     c.property_id === p.id &&
-                    ["契約中", "終了予定"].includes(c.status),
+                    ["契約中", "終了予定"].includes(effectiveContractStatus(c)),
                 )
                 .reduce((s, c) => s + c.monthly_rent, 0);
+              const paid = data.charges
+                .filter((charge) => charge.property_id === p.id)
+                .reduce((sum, charge) => sum + charge.paid_amount, 0);
+              const investment = totalInvestment(p);
               return (
                 <tr key={p.id}>
                   <td>
@@ -175,19 +190,26 @@ export function PropertiesPage() {
                   <td className="num" data-label="取得価格">
                     {yen(p.acquisition_price)}
                   </td>
-                  <td className="num" data-label="現在評価額">
+                  <td className="num" data-label="固定資産評価額">
                     {yen(p.current_valuation)}
                   </td>
                   <td className="num" data-label="年間固定資産税">
                     {yen(p.annual_property_tax)}
                   </td>
-                  <td className="num" data-label="純資産">
-                    {yen(netAssets(p))}
+                  <td className="num" data-label="想定売却価格">
+                    {p.estimated_sale_price == null ? "-" : yen(p.estimated_sale_price)}
+                  </td>
+                  <td className="num" data-label="累計入金額">
+                    {yen(paid)}
+                  </td>
+                  <td className="num" data-label="回収率">
+                    {investment > 0 ? percent(paid / investment) : "算出不可"}
                   </td>
                   <td className="num" data-label="表面利回り">
                     {percent(grossYield(full, totalInvestment(p)))}
                   </td>
                   <td className="row-actions">
+                    <Link href={`/properties/${p.id}`} title="詳細"><Eye /></Link>
                     <button onClick={() => setEditing(p)} title="編集">
                       <Pencil />
                     </button>
@@ -207,7 +229,11 @@ export function PropertiesPage() {
           initial={
             editing === "new"
               ? { ...blank, property_code: newCode }
-              : { ...editing, acquisition_date: editing.acquisition_date || "" }
+              : {
+                  ...editing,
+                  acquisition_date: editing.acquisition_date || "",
+                  estimated_sale_price_updated_at: editing.estimated_sale_price_updated_at || "",
+                }
           }
           onSave={save}
           onClose={() => setEditing(null)}
@@ -286,9 +312,12 @@ function PropertyForm({
           {text("acquisition_price", "取得価格", "number")}
           {text("acquisition_costs", "取得諸費用", "number")}
           {text("development_costs", "開発費", "number")}
-          {text("current_valuation", "現在評価額", "number")}
+          {text("current_valuation", "固定資産評価額", "number")}
+          {text("estimated_sale_price", "想定売却価格", "number")}
+          {text("estimated_sale_price_updated_at", "想定売却価格の更新日", "date")}
           {text("remaining_debt", "残債", "number")}
           {text("annual_property_tax", "固定資産税年額", "number")}
+          <label className="form-span">想定売却価格の備考<textarea value={f.estimated_sale_price_notes} onChange={(e) => setF({ ...f, estimated_sale_price_notes: e.target.value })} /></label>
         </div>
         <label>
           備考

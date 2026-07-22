@@ -33,7 +33,7 @@ const contract = {
   notes: "",
   created_at: "",
   updated_at: "",
-} as Contract;
+} as unknown as Contract;
 describe("retroactive billing", () => {
   it("does not generate after the contract end", () =>
     expect(

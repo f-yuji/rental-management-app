@@ -26,7 +26,7 @@ export function unitOccupancyMetrics(
         return (
           c.start_date <= toDate(now) &&
           (!end || end >= toDate(now)) &&
-          !["終了", "解約", "下書き"].includes(c.status)
+          !["終了", "下書き"].includes(c.status)
         );
       })
       .sort((a, b) => b.start_date.localeCompare(a.start_date))[0];
@@ -39,7 +39,7 @@ export function unitOccupancyMetrics(
           const end = effectiveEnd(contract);
           return (
             !visited.has(contract.id) &&
-            contract.termination_reason === "更新による終了" &&
+            contract.termination_reason === "更新" &&
             !!end &&
             differenceInCalendarDays(
               parseISO(continuousStart as string),

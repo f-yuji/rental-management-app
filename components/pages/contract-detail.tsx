@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useApp } from "@/components/app-provider";
 import { Badge } from "@/components/ui/shared";
 import { dateLabel, yen } from "@/lib/format";
+import { effectiveContractStatus } from "@/lib/calculations";
 import type { AttachmentCategory } from "@/types";
 
 const categories: AttachmentCategory[] = [
@@ -56,7 +57,7 @@ export function ContractDetailPage() {
             {contract.contract_code} / {property?.name} / {unit?.name}
           </p>
         </div>
-        <Badge>{contract.status}</Badge>
+        <Badge>{effectiveContractStatus(contract)}</Badge>
       </div>
       <section className="panel">
         <h2>契約情報</h2>
@@ -84,6 +85,9 @@ export function ContractDetailPage() {
         <dl className="detail-grid">
           {field("利用", contract.guarantor_enabled ? "あり" : "なし")}
           {field("保証会社名", contract.guarantor_company_name)}
+          {field("担当者名", contract.guarantor_contact_name)}
+          {field("電話番号", contract.guarantor_phone)}
+          {field("メールアドレス", contract.guarantor_email)}
           {field("保証契約番号", contract.guarantor_contract_number)}
           {field("保証開始日", dateLabel(contract.guarantor_start_date))}
           {field("保証終了日", dateLabel(contract.guarantor_end_date))}
