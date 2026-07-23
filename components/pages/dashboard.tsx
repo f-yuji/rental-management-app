@@ -193,7 +193,9 @@ export function Dashboard() {
                   const units = data.units.filter(
                     (u) => u.property_id === p.id,
                   );
-                  const rent = units.reduce((s, u) => s + u.standard_rent, 0);
+                  const rent = units
+                    .filter((unit) => unit.status !== "使用停止")
+                    .reduce((sum, unit) => sum + unit.standard_rent, 0);
                   return (
                     <tr key={p.id}>
                       <td>
