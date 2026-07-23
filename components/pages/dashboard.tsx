@@ -18,6 +18,7 @@ import {
   netAssets,
   renewalReminder,
   totalInvestment,
+  surfaceInvestment,
 } from "@/lib/calculations";
 import { dateLabel, percent, yen } from "@/lib/format";
 import { cumulativePaymentSeries } from "@/lib/dashboard-series";
@@ -32,6 +33,10 @@ export function Dashboard() {
     .reduce((s, u) => s + u.standard_rent, 0);
   const investment = data.properties.reduce(
     (s, p) => s + totalInvestment(p),
+    0,
+  );
+  const surfaceBase = data.properties.reduce(
+    (sum, property) => sum + surfaceInvestment(property),
     0,
   );
   const valuation = data.properties.reduce(
@@ -154,7 +159,7 @@ export function Dashboard() {
         />
         <Kpi label="総投資額" value={yen(investment)} />
         <Kpi label="純資産" value={yen(valuation - debt)} />
-        <Kpi label="表面利回り" value={percent(grossYield(full, investment))} />
+        <Kpi label="表面利回り" value={percent(grossYield(full, surfaceBase))} sub="取得価格＋開発費ベース" />
         <Kpi label="今月請求" value={yen(monthBilled)} />
         <Kpi label="今月入金" value={yen(monthPaid)} tone="good" />
         <Kpi
@@ -202,7 +207,7 @@ export function Dashboard() {
                         {yen(netAssets(p))}
                       </td>
                       <td className="num" data-label="表面利回り">
-                        {percent(grossYield(rent, totalInvestment(p)))}
+                        {percent(grossYield(rent, surfaceInvestment(p)))}
                       </td>
                     </tr>
                   );

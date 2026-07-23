@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useApp } from "@/components/app-provider";
 import { CsvButton, Modal, PageHeader, RecordSaveStatus } from "@/components/ui/shared";
 import { NumericInput } from "@/components/ui/numeric-input";
-import { effectiveContractStatus, grossYield, totalInvestment } from "@/lib/calculations";
+import { effectiveContractStatus, grossYield, surfaceInvestment, totalInvestment } from "@/lib/calculations";
 import { percent, yen } from "@/lib/format";
 import type { Property } from "@/types";
 const blank = {
@@ -206,7 +206,7 @@ export function PropertiesPage() {
                     {investment > 0 ? percent(paid / investment) : "算出不可"}
                   </td>
                   <td className="num" data-label="表面利回り">
-                    {percent(grossYield(full, totalInvestment(p)))}
+                    {percent(grossYield(full, surfaceInvestment(p)))}
                   </td>
                   <td className="row-actions">
                     <Link href={`/properties/${p.id}`} title="詳細"><Eye /></Link>

@@ -7,9 +7,11 @@ import {
   grossYield,
   isContractActiveInMonth,
   netAssets,
+  netYield,
   paymentDueDate,
   paymentStatus,
   startMonthProration,
+  surfaceInvestment,
   totalInvestment,
 } from ".";
 import type { Contract } from "@/types";
@@ -34,9 +36,13 @@ describe("資産計算", () => {
     ).toBe(150));
   it("純資産", () =>
     expect(netAssets({ current_valuation: 500, remaining_debt: 120 })).toBe(380));
-  it("表面・現在利回り", () => {
+  it("表面利回りの投資額は取得価格と開発費", () => {
+    expect(surfaceInvestment({ acquisition_price: 1000, development_costs: 200 })).toBe(1200);
     expect(grossYield(100, 1200)).toBe(1);
+  });
+  it("実利回りは固定資産税と取得諸費用を反映", () => {
     expect(currentYield(50, 1200)).toBe(0.5);
+    expect(netYield(100, 120, 1500)).toBe(0.72);
     expect(grossYield(1, 0)).toBeNull();
   });
 });

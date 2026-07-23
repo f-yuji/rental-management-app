@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useApp } from "@/components/app-provider";
 import { Badge, Kpi } from "@/components/ui/shared";
-import { effectiveContractStatus, totalInvestment } from "@/lib/calculations";
+import { effectiveContractStatus, grossYield, netYield, surfaceInvestment, totalInvestment } from "@/lib/calculations";
 import { dateLabel, percent, yen } from "@/lib/format";
 
 export function PropertyDetailPage() {
@@ -17,6 +17,7 @@ export function PropertyDetailPage() {
   const contracts = data.contracts.filter((row) => row.property_id === id);
   const active = contracts.filter((row) => ["契約中", "終了予定"].includes(effectiveContractStatus(row)));
   const monthlyRent = active.reduce((sum, row) => sum + row.monthly_rent, 0);
+  const fullMonthlyRent = units.filter((unit) => unit.status !== "使用停止").reduce((sum, unit) => sum + unit.standard_rent, 0);
   const paid = data.charges.filter((row) => row.property_id === id).reduce((sum, row) => sum + row.paid_amount, 0);
   const investment = totalInvestment(property);
   const recovery = investment > 0 ? paid / investment : null;
@@ -27,6 +28,8 @@ export function PropertyDetailPage() {
       <Kpi label="想定売却価格" value={property.estimated_sale_price == null ? "未設定" : yen(property.estimated_sale_price)} sub={property.estimated_sale_price_updated_at ? `更新日 ${dateLabel(property.estimated_sale_price_updated_at)}` : undefined} />
       <Kpi label="月額賃料" value={yen(monthlyRent)} />
       <Kpi label="年間賃料" value={yen(monthlyRent * 12)} />
+      <Kpi label="表面利回り" value={percent(grossYield(fullMonthlyRent, surfaceInvestment(property)))} sub="満室賃料 ÷（取得価格＋開発費）" />
+      <Kpi label="実利回り" value={percent(netYield(monthlyRent, property.annual_property_tax, investment))} sub="（現在賃料－固定資産税）÷取得総額" />
       <Kpi label="累計入金額（請求ログ）" value={yen(paid)} sub="物件へ配分できない初期累計は除外" tone="good" />
       <Kpi label="回収率" value={recovery == null ? "算出不可" : percent(recovery)} sub={recovery != null && recovery >= 1 ? "元本回収済み / 請求ログの入金額ベース" : "請求ログの入金額ベース"} tone={recovery != null && recovery >= 1 ? "good" : undefined} />
     </div>

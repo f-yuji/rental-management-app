@@ -24,12 +24,23 @@ export const totalInvestment = (
     "acquisition_price" | "acquisition_costs" | "development_costs"
   >,
 ) => p.acquisition_price + p.acquisition_costs + p.development_costs;
+export const surfaceInvestment = (
+  p: Pick<Property, "acquisition_price" | "development_costs">,
+) => p.acquisition_price + p.development_costs;
 export const netAssets = (
   p: Pick<Property, "current_valuation" | "remaining_debt">,
 ) => p.current_valuation - p.remaining_debt;
 export const grossYield = (monthly: number, investment: number) =>
   investment > 0 ? (monthly * 12) / investment : null;
 export const currentYield = grossYield;
+export const netYield = (
+  monthlyRent: number,
+  annualPropertyTax: number,
+  investment: number,
+) =>
+  investment > 0
+    ? (monthlyRent * 12 - annualPropertyTax) / investment
+    : null;
 export const outstanding = (billed: number, paid: number) =>
   Math.max(billed - paid, 0);
 export const cumulativeTotals = (
